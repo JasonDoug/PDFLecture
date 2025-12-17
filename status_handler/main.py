@@ -6,6 +6,9 @@ from typing import Dict, Any, Union
 import functions_framework
 from google.cloud import firestore, storage
 
+import google.auth
+from google.auth import impersonated_credentials
+
 # Initialize clients
 _firestore_client = None
 _storage_client = None
@@ -19,7 +22,20 @@ def get_firestore_client():
 def get_storage_client():
     global _storage_client
     if _storage_client is None:
-        _storage_client = storage.Client()
+        # Use impersonated credentials to allow signing blobs
+        # The service account must have 'Service Account Token Creator' role on itself (or project)
+        source_credentials, project_id = google.auth.default()
+        
+        target_principal = "852565109955-compute@developer.gserviceaccount.com"
+        
+        creds = impersonated_credentials.Credentials(
+            source_credentials=source_credentials,
+            target_principal=target_principal,
+            target_scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            lifetime=3600
+        )
+        
+        _storage_client = storage.Client(credentials=creds)
     return _storage_client
 
 def generate_signed_url(gcs_uri: str, expiration_minutes: int = 60) -> Union[str, None]:

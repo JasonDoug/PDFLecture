@@ -99,10 +99,16 @@ Extract the following information in strict JSON format:
 Be thorough in analyzing all pages, diagrams, and content structure."""
 
     try:
-        # Upload PDF to Gemini Files API for processing
+
+        # Save bytes to temporary file for upload
+        temp_pdf_path = '/tmp/temp_upload.pdf'
+        with open(temp_pdf_path, 'wb') as f:
+            f.write(pdf_content)
+
+        # Upload PDF to Gemini Files API
         print("Uploading PDF to Gemini Files API...")
         uploaded_file = genai.upload_file(
-            file_data=pdf_content,
+            path=temp_pdf_path,
             mime_type='application/pdf',
             display_name='document.pdf'
         )
@@ -114,11 +120,7 @@ Be thorough in analyzing all pages, diagrams, and content structure."""
             'response_mime_type': 'application/json'
         }
         
-        # Add media_resolution. Valid for Gemini 2.5-Flash (if supported) and 3.0-Flash
-        # Reference: 'LOW' | 'MEDIUM' | 'HIGH' - controls PDF rendering quality
-        # We target HIGH for best text/visual extraction
-        if any(ver in model_name for ver in ['2.5', '3.0', 'gemini-3']):
-             gen_config['media_resolution'] = 'HIGH'
+
         
         # Generate analysis using uploaded file
         response = model.generate_content(

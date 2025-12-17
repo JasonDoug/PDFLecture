@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-# from google.cloud import firestore <--- Removed top-level import
+from typing import List, Dict, Optional
 
 @dataclass
 class AgentPersonality:

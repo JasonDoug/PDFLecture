@@ -1,10 +1,12 @@
 # Cloud Functions Framework
 functions-framework==3.*
 
+
 # Google Cloud Services
 google-cloud-storage==2.14.*
 google-cloud-firestore==2.14.*
 google-cloud-pubsub==2.19.*
+google-cloud-texttospeech==2.14.*
 
 # Google Generative AI (Gemini)
 google-generativeai==0.8.*

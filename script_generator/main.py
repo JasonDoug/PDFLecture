@@ -144,7 +144,14 @@ def generate_script(cloud_event):
         
         # Generate Script
         full_script = []
-        sections = analysis.get('sections', [])
+        # Support both 'suggested_sections' (Gemini output) and 'sections' (legacy)
+        sections = analysis.get('suggested_sections') or analysis.get('sections') or []
+        
+        if not sections:
+            print(f"Warning: No sections found in analysis: {analysis.keys()}")
+            # Fallback: if analysis is just a list, treat it as sections
+            if isinstance(analysis, list):
+                sections = analysis
         prev_context = ""
         
         total_sections = len(sections)

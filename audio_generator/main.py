@@ -128,7 +128,7 @@ def generate_audio(cloud_event):
         
         for i, section in enumerate(sections):
             section_id = section.get('section_id', i+1)
-            text = section.get('script', '')
+            text = section.get('text') or section.get('script', '')
             
             if not text:
                 print(f"Skipping empty section {section_id}")
