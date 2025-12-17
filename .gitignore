@@ -18,6 +18,7 @@ dist/
 # Google Cloud
 .gcloudignore
 service-account-key.json
+pdf2audiobook-*.json
 
 # IDEs
 .vscode/
