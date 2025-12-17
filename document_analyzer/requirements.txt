@@ -1,0 +1,17 @@
+# Cloud Functions Framework
+functions-framework==3.*
+
+# Google Cloud Services
+google-cloud-storage==2.14.*
+google-cloud-firestore==2.14.*
+google-cloud-pubsub==2.19.*
+
+# Google Generative AI (Gemini)
+google-generativeai==0.8.*
+
+# Flask for local development
+Flask==3.0.*
+flask-cors==4.*
+
+# Utilities
+python-dotenv==1.0.*

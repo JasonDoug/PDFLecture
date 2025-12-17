@@ -1,0 +1,174 @@
+import os
+import json
+import base64
+import requests
+from abc import ABC, abstractmethod
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
+
+# Re-define config classes to avoid import issues if not in same package
+@dataclass
+class TTSConfig:
+    provider: str
+    voice_id: str
+    stability: float = 0.5
+    similarity_boost: float = 0.75
+    style: float = 0.0
+    speaking_rate: float = 1.0
+
+@dataclass
+class AudioResult:
+    audio_content: bytes
+    duration_seconds: float
+    # List of {word: str, start: float, end: float}
+    timestamps: List[Dict[str, Any]] 
+    format: str = "mp3"
+
+class TTSProvider(ABC):
+    @abstractmethod
+    def generate_audio(self, text: str, config: TTSConfig) -> AudioResult:
+        pass
+
+class ElevenLabsProvider(TTSProvider):
+    def generate_audio(self, text: str, config: TTSConfig) -> AudioResult:
+        api_key = os.environ.get('ELEVENLABS_API_KEY')
+        if not api_key:
+            raise ValueError("ELEVENLABS_API_KEY environment variable not set")
+            
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{config.voice_id}/with-timestamps"
+        
+        headers = {
+            "xi-api-key": api_key,
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            "voice_settings": {
+                "stability": config.stability,
+                "similarity_boost": config.similarity_boost,
+                "style": config.style,
+                "use_speaker_boost": True
+            }
+        }
+        
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code != 200:
+            raise Exception(f"ElevenLabs API Error: {response.status_code} - {response.text}")
+            
+        data = response.json()
+        
+        # Decode audio from base64 (ElevenLabs timestamps endpoint returns JSON with base64 audio)
+        audio_content = base64.b64decode(data["audio_base64"])
+        alignment = data.get("alignment", {})
+        
+        # Convert alignment to standard timestamp format
+        timestamps = []
+        chars = alignment.get("characters", [])
+        starts = alignment.get("character_start_times_seconds", [])
+        ends = alignment.get("character_end_times_seconds", [])
+        
+        # ElevenLabs returns character-level alignment. 
+        # For simplicity/karaoke, we might process this into words later, 
+        # or just store character alignment. 
+        # Let's try to group into words for the frontend.
+        current_word = ""
+        word_start = 0.0
+        
+        for i, char in enumerate(chars):
+            if i >= len(starts) or i >= len(ends):
+                break
+                
+            if char.strip():
+                if not current_word:
+                    word_start = starts[i]
+                current_word += char
+            elif current_word:
+                # Space or punctuation ending a word
+                timestamps.append({
+                    "word": current_word,
+                    "start": word_start,
+                    "end": ends[i-1]
+                })
+                current_word = ""
+                
+        # Catch last word
+        if current_word:
+             timestamps.append({
+                "word": current_word,
+                "start": word_start,
+                "end": ends[len(current_word)-1] if ends else 0.0
+            })
+
+        # Calculate duration roughly from last timestamp or audio length
+        duration = ends[-1] if ends else len(audio_content) / 44100  # fallback
+        
+        return AudioResult(
+            audio_content=audio_content,
+            duration_seconds=duration,
+            timestamps=timestamps
+        )
+
+class GoogleTTSProvider(TTSProvider):
+    def generate_audio(self, text: str, config: TTSConfig) -> AudioResult:
+        from google.cloud import texttospeech
+        
+        client = texttospeech.TextToSpeechClient()
+        
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+        
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="en-US",
+            name=config.voice_id if config.voice_id else "en-US-Journey-F", # Fallback to Journey voice
+            ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+        )
+        
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=config.speaking_rate
+            # Note: Google TTS standard API does not return word timestamps easily with MP3
+            # We would need to use 'enable_time_pointing' which works with LINEAR16 or specific configs
+            # For MVP, we might skip precise timestamps or estimate them.
+        )
+        
+        # Journey voices support time pointing? Not officially in standard docs everywhere yet for simple MP3.
+        # But let's try standard synthesis.
+        
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config
+        )
+        
+        # Mock timestamps for Google (simple estimation)
+        words = text.split()
+        duration_est = len(words) / (150/60) # 150 wpm
+        avg_word_dur = duration_est / len(words) if words else 0
+        
+        timestamps = []
+        curr = 0.0
+        for w in words:
+            timestamps.append({
+                "word": w,
+                "start": curr,
+                "end": curr + avg_word_dur
+            })
+            curr += avg_word_dur
+            
+        return AudioResult(
+            audio_content=response.audio_content,
+            duration_seconds=duration_est,
+            timestamps=timestamps
+        )
+
+def get_provider(provider_name: str) -> TTSProvider:
+    if provider_name.lower() == "elevenlabs":
+        return ElevenLabsProvider()
+    elif provider_name.lower() == "google":
+        return GoogleTTSProvider()
+    else:
+        # Default to Google as it might be cheaper/easier if env var missing, 
+        # but let's stick to explicit requests.
+        return GoogleTTSProvider()

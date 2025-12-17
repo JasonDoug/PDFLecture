@@ -1,0 +1,281 @@
+print("DEBUG: Starting main.py imports...")
+import base64
+import json
+import os
+from datetime import datetime
+from typing import Dict, List, Any
+
+print("DEBUG: Importing functions_framework...")
+import functions_framework
+print("DEBUG: Importing google.cloud clients...")
+from google.cloud import storage, firestore, pubsub_v1
+# print("DEBUG: Importing google.generativeai...")
+# import google.generativeai as genai
+
+print("DEBUG: Importing agents...")
+from agents import get_agent, Agent
+print("DEBUG: Imports complete.")
+
+# Initialize clients
+_storage_client = None
+_firestore_client = None
+_pubsub_client = None
+
+def get_storage_client():
+    global _storage_client
+    if _storage_client is None:
+        _storage_client = storage.Client()
+    return _storage_client
+
+def get_firestore_client():
+    global _firestore_client
+    if _firestore_client is None:
+        _firestore_client = firestore.Client()
+    return _firestore_client
+
+def get_pubsub_client():
+    global _pubsub_client
+    if _pubsub_client is None:
+        _pubsub_client = pubsub_v1.PublisherClient()
+    return _pubsub_client
+
+def download_json_from_gcs(storage_path: str) -> Dict[str, Any]:
+    """Download and parse JSON from GCS"""
+    client = get_storage_client()
+    
+    if storage_path.startswith('gs://'):
+        path_parts = storage_path.replace('gs://', '').split('/', 1)
+        bucket_name = path_parts[0]
+        blob_name = path_parts[1]
+    else:
+        raise ValueError(f"Invalid storage path: {storage_path}")
+        
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    
+    content = blob.download_as_string()
+    return json.loads(content)
+
+def save_script_to_gcs(bucket_name: str, job_id: str, script_data: Dict[str, Any]) -> str:
+    """Save generated script to GCS"""
+    client = get_storage_client()
+    bucket = client.bucket(bucket_name)
+    
+    blob_path = f"uploads/{job_id}/script.json"
+    blob = bucket.blob(blob_path)
+    
+    blob.upload_from_string(
+        json.dumps(script_data, indent=2),
+        content_type='application/json'
+    )
+    
+    return f"gs://{bucket_name}/{blob_path}"
+
+def generate_section_script(section: Dict[str, Any], agent: Agent, previous_context: str = "") -> str:
+    """Generate script for a single section using Gemini"""
+    
+    model_name = os.environ.get('GEMINI_MODEL', 'gemini-1.5-flash')
+    model = genai.GenerativeModel(model_name)
+    
+    system_prompt = f"""
+You are {agent.name}, an AI lecturer.
+Description: {agent.description}
+
+Personality Traits: {', '.join(agent.personality.traits)}
+Teaching Style: {agent.personality.teaching_style}
+Tone: {agent.personality.tone}
+Humor Level: {agent.personality.humor_level}
+
+Your goal is to transform educational content into an engaging audio lecture.
+WRITE ONLY THE SPOKEN WORD. Do not include scene directions, timestamps, or actor notes.
+Do not use headers or markdown in the output, just the text to be spoken.
+
+Rules:
+1. Speak directly to the listener.
+2. Use conversational transitions.
+3. {f"Include {agent.script_config.example_count} examples." if agent.script_config.include_examples else "Keep it theoretical."}
+4. {f"Ask rhetorical questions." if agent.script_config.use_questions else "Be direct."}
+5. Keep the length approximately {agent.script_config.max_section_length} words.
+"""
+
+    user_prompt = f"""
+Create a lecture script for this section:
+Title: {section.get('title', 'Untitled')}
+Key Points: {', '.join(section.get('key_points', []))}
+Context: {section.get('topics', [])}
+
+Previous Context: {previous_context[-500:] if previous_context else "Start of lecture."}
+
+Generate the spoken script now.
+"""
+
+    response = model.generate_content(
+        contents=[
+            {"role": "user", "parts": [system_prompt + "\n\n" + user_prompt]}
+        ]
+    )
+    
+    return response.text
+
+@functions_framework.cloud_event
+def generate_script(cloud_event):
+    """
+    Cloud Function triggered by Pub/Sub message
+    Generates lecture script from analysis
+    """
+    try:
+        # Parse Pub/Sub message
+        message_data = base64.b64decode(cloud_event.data["message"]["data"]).decode()
+        message = json.loads(message_data)
+        
+        job_id = message.get('jobId')
+        if not job_id:
+            print("Error: No jobId in message")
+            return
+            
+        print(f"Starting script generation for job: {job_id}")
+        
+        # Lazy import genai
+        import google.generativeai as genai
+        
+        # Initialize
+        db = get_firestore_client()
+        collection_name = os.environ.get('FIRESTORE_COLLECTION', 'lecture-jobs')
+        job_ref = db.collection(collection_name).document(job_id)
+        job_doc = job_ref.get()
+        
+        if not job_doc.exists:
+            print(f"Error: Job {job_id} not found")
+            return
+            
+        job_data = job_doc.to_dict()
+        
+        # Update status
+        job_ref.update({
+            'status': 'generating_script',
+            'progress.current_step': 'generating_script',
+            'progress.percentage': 40,
+            'progress.message': 'Writing lecture script...'
+        })
+        
+        # Get Analysis
+        analysis_path = job_data.get('analysis', {}).get('storage_path')
+        if not analysis_path:
+            raise ValueError("No analysis storage path found")
+            
+        analysis = download_json_from_gcs(analysis_path)
+        
+        # Get Agent (default to Prof Classics if not specified)
+        agent_id = job_data.get('agent', {}).get('agentId', 'prof-classics-001')
+        agent = get_agent(agent_id)
+        
+        # Configure Gemini
+        api_key = os.environ.get('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not set")
+        genai.configure(api_key=api_key)
+        
+        # Generate Scripts for each section
+        sections = analysis.get('suggested_sections', [])
+        generated_sections = []
+        full_script_text = ""
+        
+        for i, section in enumerate(sections):
+            print(f"Generating section {i+1}/{len(sections)}...")
+            
+            script_text = generate_section_script(section, agent, full_script_text)
+            full_script_text += script_text + "\n\n"
+            
+            # Estimate duration (rough approx: 150 words per minute)
+            word_count = len(script_text.split())
+            duration_est = int(word_count / 150 * 60)
+            
+            generated_sections.append({
+                "section_id": i + 1,
+                "title": section.get('title'),
+                "script": script_text,
+                "word_count": word_count,
+                "estimated_duration": duration_est
+            })
+            
+            # Update progress
+            progress_pct = 40 + int((i + 1) / len(sections) * 20)  # 40% -> 60%
+            job_ref.update({
+                'progress.percentage': progress_pct,
+                'progress.message': f'Writing section {i+1} of {len(sections)}...'
+            })
+
+        # Save complete script
+        bucket_name = os.environ.get('GCS_BUCKET_NAME', 'pdf-lecture-uploads')
+        script_path = save_script_to_gcs(bucket_name, job_id, {
+            "jobId": job_id,
+            "agentId": agent.agent_id,
+            "sections": generated_sections,
+            "total_words": sum(s['word_count'] for s in generated_sections),
+            "total_duration_estimate": sum(s['estimated_duration'] for s in generated_sections),
+            "generated_at": datetime.utcnow().isoformat() + 'Z'
+        })
+        
+        # Update completion status
+        job_ref.update({
+            'status': 'script_generated',
+            'updated_at': datetime.utcnow().isoformat() + 'Z',
+            'script': {
+                'status': 'completed',
+                'section_count': len(generated_sections),
+                'storage_path': script_path
+            },
+            'progress.current_step': 'script_generated',
+            'progress.percentage': 60,
+            'progress.message': 'Script generation complete'
+        })
+        
+        print(f"Script generation complete for {job_id}")
+        
+        # Trigger Audio Generation
+        trigger_audio_generation(job_id)
+        
+    except Exception as e:
+        print(f"Error generating script: {str(e)}")
+        if 'job_ref' in locals():
+            job_ref.update({
+                'status': 'failed',
+                'progress.message': f'Script generation failed: {str(e)}'
+            })
+
+def trigger_audio_generation(job_id: str) -> None:
+    """Trigger audio generation via Pub/Sub"""
+    client = get_pubsub_client()
+    project_id = os.environ.get('GCP_PROJECT_ID')
+    topic_name = f"projects/{project_id}/topics/audio-generation"
+    
+    message_data = json.dumps({
+        'jobId': job_id,
+        'timestamp': datetime.utcnow().isoformat()
+    }).encode('utf-8')
+    
+    try:
+        future = client.publish(topic_name, message_data)
+        future.result()
+        print(f"Triggered audio generation for job: {job_id}")
+    except Exception as e:
+        print(f"Warning: Could not publish to Pub/Sub: {e}")
+
+@functions_framework.http
+def generate_script_http(request):
+    """HTTP trigger for testing"""
+    try:
+        data = request.get_json()
+        job_id = data.get('jobId')
+        
+        class MockEvent:
+            data = {
+                "message": {
+                    "data": base64.b64encode(json.dumps({'jobId': job_id}).encode())
+                }
+            }
+            
+        generate_script(MockEvent())
+        return {'success': True}, 200
+    except Exception as e:
+        return {'error': str(e)}, 500
