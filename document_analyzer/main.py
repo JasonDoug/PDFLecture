@@ -12,6 +12,8 @@ from typing import Dict, Any
 import functions_framework
 from google.cloud import storage, firestore, pubsub_v1
 import google.generativeai as genai
+import google.generativeai.types as safety_types
+from io import BytesIO
 
 # Initialize clients
 _storage_client = None
@@ -48,6 +50,19 @@ def download_pdf_from_gcs(storage_path: str) -> bytes:
     
     return blob.download_as_bytes()
 
+def extract_text_from_pdf(pdf_content: bytes) -> str:
+    """Extract text from PDF using pypdf"""
+    try:
+        from pypdf import PdfReader
+        pdf = PdfReader(BytesIO(pdf_content))
+        text = ""
+        for page in pdf.pages:
+            text += page.extract_text() + "\n"
+        return text
+    except Exception as e:
+        print(f"Text extraction failed: {e}")
+        return ""
+
 
 def analyze_document_with_gemini(pdf_content: bytes) -> Dict[str, Any]:
     """
@@ -62,15 +77,23 @@ def analyze_document_with_gemini(pdf_content: bytes) -> Dict[str, Any]:
     
     # Use gemini-2.5-flash as default, or fallback/upgrade based on env
     model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
-    model = genai.GenerativeModel(model_name)
+    model = genai.GenerativeModel(
+        model_name,
+        system_instruction="You are an expert document analyzer."
+    )
     
     print(f"Using Gemini model: {model_name}")
+
+    # Hybrid Strategy: defined below
+    extracted_text = extract_text_from_pdf(pdf_content)
+    print(f"Extracted {len(extracted_text)} chars of text for fallback availability.")
 
     analysis_prompt = """
 Analyze this PDF document comprehensively for a lecture generation system.
 Extract the following information in strict JSON format:
 
 {
+  "document_type": "Non-Fiction|Fiction|Textbook|Research Paper",
   "main_topics": ["list of main topics covered"],
   "difficulty_level": "Beginner|Intermediate|Advanced",
   "target_audience": "description of intended audience",
@@ -88,6 +111,7 @@ Extract the following information in strict JSON format:
       "title": "section title for lecture",
       "topics": ["specific topics to cover"],
       "key_points": ["main point 1", "main point 2"],
+      "detailed_content": "comprehensive summary of this section's content, including definitions, dates, and names. This is CRITICAL for the script writer.",
       "estimated_duration_minutes": 8
     }
   ],
@@ -96,17 +120,35 @@ Extract the following information in strict JSON format:
   "recommended_examples": ["suggestion for real-world examples to add"]
 }
 
-Be thorough in analyzing all pages, diagrams, and content structure."""
+Be thorough in analyzing the content structure."""
 
+    # Generate analysis using uploaded file
+    # Use explicit enum types for robustness
+    safety_settings = {
+        genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+        genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: genai.types.HarmBlockThreshold.BLOCK_NONE,
+        genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+        genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+    }
+    
+    # Build generation config
+    gen_config = {
+        'temperature': 0.2,  # Lower temperature for consistent analysis
+        'response_mime_type': 'application/json'
+    }
+    
+    # Strategy: Try Vision First (Best Quality). If blocked, fallback to Text (pypdf).
+    # extracted_text is already available from line 88
+    
+    # 1. Attempt Vision Analysis
     try:
-
+        print("Attempting Vision Analysis (Method: Upload)...")
         # Save bytes to temporary file for upload
         temp_pdf_path = '/tmp/temp_upload.pdf'
         with open(temp_pdf_path, 'wb') as f:
             f.write(pdf_content)
 
         # Upload PDF to Gemini Files API
-        print("Uploading PDF to Gemini Files API...")
         uploaded_file = genai.upload_file(
             path=temp_pdf_path,
             mime_type='application/pdf',
@@ -114,34 +156,35 @@ Be thorough in analyzing all pages, diagrams, and content structure."""
         )
         print(f"Uploaded file URI: {uploaded_file.uri}")
         
-        # Build generation config
-        gen_config = {
-            'temperature': 0.2,  # Lower temperature for consistent analysis
-            'response_mime_type': 'application/json'
-        }
+        content_parts = [uploaded_file, analysis_prompt]
         
-
-        
-        # Generate analysis using uploaded file
         response = model.generate_content(
-            [uploaded_file, analysis_prompt],
-            generation_config=gen_config
+            content_parts,
+            generation_config=gen_config,
+            safety_settings=safety_settings
         )
         
-        # Parse JSON response
+        # Check for blocking
+        if response.prompt_feedback.block_reason:
+             print(f"Vision Analysis Blocked! Reason: {response.prompt_feedback.block_reason}")
+             raise ValueError("Vision Blocked")
+             
+        # Parse JSON to confirm valid response
         try:
              analysis = json.loads(response.text)
-        except json.JSONDecodeError:
-             # Fallback if response is wrapped in markdown code blocks
+        except Exception:
+             # If parsing fails, it might be a block or empty response
+             if not response.text:
+                 raise ValueError("Empty response from Vision")
+             # Fallback parsing logic
              text = response.text
              if "```json" in text:
                  text = text.split("```json")[1].split("```")[0]
              elif "```" in text:
                  text = text.split("```")[1].split("```")[0]
              analysis = json.loads(text)
-        
-        # Extract usage metadata
-        usage_metadata = {}
+             
+        # Add metadata
         if hasattr(response, 'usage_metadata'):
             usage_metadata = {
                 'prompt_token_count': getattr(response.usage_metadata, 'prompt_token_count', 0),
@@ -149,27 +192,61 @@ Be thorough in analyzing all pages, diagrams, and content structure."""
                 'total_token_count': getattr(response.usage_metadata, 'total_token_count', 0),
             }
             print(f"Usage metadata: {usage_metadata}")
-        
-        # Add metadata to analysis for storage
+            
         analysis['_metadata'] = {
             'model': model_name,
             'usage': usage_metadata,
             'timestamp': datetime.utcnow().isoformat() + 'Z',
-            'file_uri': uploaded_file.uri
+            'file_uri': uploaded_file.uri,
+            'method': 'vision'
         }
         
-        # Clean up uploaded file from Gemini Files API
+        # Cleanup
         try:
             genai.delete_file(uploaded_file.name)
-            print(f"Deleted uploaded file: {uploaded_file.name}")
-        except Exception as cleanup_error:
-            print(f"Warning: Could not delete uploaded file: {cleanup_error}")
-        
+        except:
+            pass
+            
         return analysis
         
     except Exception as e:
-        print(f"Error analyzing document with Gemini: {str(e)}")
-        raise
+        print(f"Vision Analysis Failed or Blocked: {e}")
+        print("Falling back to Text-Based Analysis (Method: pypdf)...")
+        
+        # 2. Attempt Text Fallback
+        if len(extracted_text) < 50:
+             raise ValueError("Text extraction failed or too short. Cannot fallback.")
+             
+        content_parts = [analysis_prompt, f"DOCUMENT CONTENT:\n{extracted_text}"]
+        
+        response = model.generate_content(
+            content_parts,
+            generation_config=gen_config,
+            safety_settings=safety_settings
+        )
+        
+        # Parse Fallback JSON
+        try:
+             analysis = json.loads(response.text)
+        except json.JSONDecodeError:
+             text = response.text
+             if "```json" in text:
+                 text = text.split("```json")[1].split("```")[0]
+             elif "```" in text:
+                 text = text.split("```")[1].split("```")[0]
+             analysis = json.loads(text)
+             
+        # Add metadata
+        analysis['_metadata'] = {
+            'model': model_name,
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'method': 'text_fallback'
+        }
+        return analysis
+
+
+        
+
 
 
 def save_analysis_to_gcs(bucket_name: str, job_id: str, analysis: Dict[str, Any]) -> str:

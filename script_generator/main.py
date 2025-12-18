@@ -49,7 +49,7 @@ def upload_json_to_gcs(bucket_name: str, blob_name: str, data: Dict[str, Any]) -
     
     return f"gs://{bucket_name}/{blob_name}"
 
-def generate_section_script(section: Dict[str, Any], agent, prev_context: str = "") -> str:
+def generate_section_script(section: Dict[str, Any], agent, document_type: str = "Non-Fiction", prev_context: str = "") -> str:
     """Generate script for a single section using Gemini"""
     # Lazy import to avoid startup overhead
     import google.generativeai as genai
@@ -59,31 +59,46 @@ def generate_section_script(section: Dict[str, Any], agent, prev_context: str = 
         raise ValueError("GEMINI_API_KEY not set")
     genai.configure(api_key=api_key)
     
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel(
+        'gemini-2.5-flash',
+        system_instruction=agent.system_prompt
+    )
     
+    # Grounding instructions based on document type
+    grounding_instruction = ""
+    if document_type == "Fiction":
+        grounding_instruction = "This is a work of fiction. RESPECT THE NARRATIVE. Do not treat characters or events as historical facts unless explicitly stated in the text. Focus on the story, themes, and emotional arc."
+    else:
+        grounding_instruction = "This is non-fiction. Stick STRICTLY to the provided text. Do not hallucinate external facts or go on tangents. If the text doesn't say it, don't invent it."
+
     # Construct prompt based on agent persona
     prompt = f"""
-    You are {agent.name}.
-    Description: {agent.description}
+    TASK: Convert the following section into a spoken lecture script.
+    
+    CONTEXT:
+    Document Type: {document_type}
+    {grounding_instruction}
+    
+    AGENT INFO (Reinforcement):
+    Name: {agent.name}
     Tone: {agent.personality.tone}
-    Teaching Style: {agent.personality.teaching_style}
     
-    Your task is to convert the following section of a document into a spoken lecture script.
+    INPUT SECTION:
+    Title: {section.get('title', 'Untitled')}
+    Detailed Content (Primary Source): {section.get('detailed_content', 'No detailed content provided.')}
+    Key Points (Summary): {section.get('key_points', [])}
+    Short Content (Legacy): {section.get('content', '')}
     
-    Section Title: {section.get('title', 'Untitled')}
-    Content:
-    {section.get('content', '')}
+    PREVIOUS CONTEXT:
+    {prev_context}
     
-    Previous Context: {prev_context}
-    
-    Guidelines:
+    OUTPUT GUIDELINES:
     - Write EXACTLY as it should be spoken.
-    - Use clear, engaging language.
     - {agent.personality.humor_level} humor.
     - Include {agent.personality.example_preference}.
-    - Connect to the previous section if relevant.
-    - Do NOT include scene directions or actor notes, just the speech.
-    - Keep it under {agent.script_config.max_section_length} words.
+    - Connect to the previous section.
+    - NO scene directions.
+    - Length: Under {agent.script_config.max_section_length} words.
     """
     
     response = model.generate_content(prompt)
@@ -142,6 +157,10 @@ def generate_script(cloud_event):
         print(f"Using agent: {agent_id}")
         agent = get_agent(agent_id)
         
+        # Determine Document Type (Default to Non-Fiction)
+        document_type = analysis.get('document_type', 'Non-Fiction')
+        print(f"Document Type: {document_type}")
+        
         # Generate Script
         full_script = []
         # Support both 'suggested_sections' (Gemini output) and 'sections' (legacy)
@@ -165,7 +184,7 @@ def generate_script(cloud_event):
                 'progress.message': f'Writing section {i+1} of {total_sections}...'
             })
             
-            script_text = generate_section_script(section, agent, prev_context)
+            script_text = generate_section_script(section, agent, document_type, prev_context)
             
             full_script.append({
                 'title': section.get('title'),

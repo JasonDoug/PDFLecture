@@ -21,6 +21,7 @@ const views = {
 const dom = {
     dropZone: document.getElementById('drop-zone'),
     fileInput: document.getElementById('file-input'),
+    agentSelect: document.getElementById('agent-select'),
     uploadLoading: document.getElementById('upload-loading'),
     progressBar: document.getElementById('progress-bar'),
     progressMessage: document.getElementById('progress-message'),
@@ -45,6 +46,7 @@ const dom = {
 function init() {
     setupEventListeners();
     checkUrlParams();
+    loadAgents();
 }
 
 function setupEventListeners() {
@@ -113,6 +115,9 @@ async function uploadFile(file) {
 
     const formData = new FormData();
     formData.append('file', file);
+    if (dom.agentSelect.value) {
+        formData.append('agentId', dom.agentSelect.value);
+    }
 
     try {
         const response = await fetch(CONFIG.API_ENDPOINTS.UPLOAD, {
@@ -136,6 +141,30 @@ async function uploadFile(file) {
         console.error(error);
         alert('Error uploading file: ' + error.message);
         switchView('upload');
+    }
+}
+
+async function loadAgents() {
+    try {
+        const response = await fetch(CONFIG.API_ENDPOINTS.AGENTS);
+        if (!response.ok) throw new Error('Failed to load agents');
+        const data = await response.json();
+
+        const select = dom.agentSelect;
+        select.innerHTML = '';
+
+        const agents = data.agents || [];
+        agents.forEach(agent => {
+            const option = document.createElement('option');
+            option.value = agent.agentId;
+            option.textContent = agent.name;
+            if (agent.agentId === 'prof-classics-001') option.selected = true;
+            select.appendChild(option);
+        });
+
+    } catch (e) {
+        console.error(e);
+        dom.agentSelect.innerHTML = '<option disabled>Failed to load professors</option>';
     }
 }
 

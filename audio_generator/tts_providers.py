@@ -29,8 +29,17 @@ class TTSProvider(ABC):
     def generate_audio(self, text: str, config: TTSConfig) -> AudioResult:
         pass
 
+    def clean_text(self, text: str) -> str:
+        """Remove markdown artifacts that might be spoken"""
+        # Remove asterisks (often used for bold/italics)
+        text = text.replace('*', '')
+        # Remove hashes (headers)
+        text = text.replace('#', '')
+        return text
+
 class ElevenLabsProvider(TTSProvider):
     def generate_audio(self, text: str, config: TTSConfig) -> AudioResult:
+        text = self.clean_text(text)
         api_key = os.environ.get('ELEVENLABS_API_KEY')
         if not api_key:
             raise ValueError("ELEVENLABS_API_KEY environment variable not set")
@@ -113,16 +122,24 @@ class ElevenLabsProvider(TTSProvider):
 
 class GoogleTTSProvider(TTSProvider):
     def generate_audio(self, text: str, config: TTSConfig) -> AudioResult:
+        text = self.clean_text(text)
         from google.cloud import texttospeech
         
         client = texttospeech.TextToSpeechClient()
         
         synthesis_input = texttospeech.SynthesisInput(text=text)
         
+        # Extract language code from voice_id (e.g., "en-GB-Neural2-D" -> "en-GB")
+        # Default to "en-US" if extraction fails
+        language_code = "en-US"
+        if config.voice_id:
+            parts = config.voice_id.split('-')
+            if len(parts) >= 2:
+                language_code = f"{parts[0]}-{parts[1]}"
+
         voice = texttospeech.VoiceSelectionParams(
-            language_code="en-US",
-            name=config.voice_id if config.voice_id else "en-US-Journey-F", # Fallback to Journey voice
-            ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+            language_code=language_code,
+            name=config.voice_id if config.voice_id else "en-US-Journey-F" # Fallback to Journey voice
         )
         
         audio_config = texttospeech.AudioConfig(

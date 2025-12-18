@@ -69,10 +69,14 @@ def upload_to_gcs(bucket_name: str, job_id: str, filename: str, file_content: by
     return f"gs://{bucket_name}/{blob_path}"
 
 
-def create_job_record(job_id: str, filename: str, file_size: int, storage_path: str) -> None:
+def create_job_record(job_id: str, filename: str, file_size: int, storage_path: str, agent_id: str = None) -> None:
     """Create job record in Firestore"""
     db = get_firestore_client()
     collection_name = os.environ.get('FIRESTORE_COLLECTION', 'lecture-jobs')
+    
+    agent_data = {}
+    if agent_id:
+        agent_data = {'agentId': agent_id}
     
     job_data = {
         'jobId': job_id,
@@ -84,6 +88,7 @@ def create_job_record(job_id: str, filename: str, file_size: int, storage_path: 
             'size_bytes': file_size,
             'storage_path': storage_path
         },
+        'agent': agent_data,
         'analysis': {
             'status': 'pending'
         },
@@ -129,6 +134,7 @@ def upload_pdf(request: Request):
     HTTP Cloud Function for PDF upload
     
     Accepts: multipart/form-data with 'file' field
+             optional 'agentId' field
     Returns: JSON with jobId and status
     """
     
@@ -153,6 +159,7 @@ def upload_pdf(request: Request):
             }), 400, headers
         
         file = request.files['file']
+        agent_id = request.form.get('agentId')
         
         # Check if file is selected
         if file.filename == '':
@@ -194,7 +201,7 @@ def upload_pdf(request: Request):
         storage_path = upload_to_gcs(bucket_name, job_id, filename, file_content)
         
         # Create job record in Firestore
-        create_job_record(job_id, filename, len(file_content), storage_path)
+        create_job_record(job_id, filename, len(file_content), storage_path, agent_id)
         
         # Trigger document analysis
         trigger_document_analysis(job_id)
@@ -204,6 +211,7 @@ def upload_pdf(request: Request):
             'success': True,
             'jobId': job_id,
             'message': 'PDF uploaded successfully',
+            'agentId': agent_id,
             'pdf': {
                 'filename': filename,
                 'size_mb': round(len(file_content) / (1024 * 1024), 2)

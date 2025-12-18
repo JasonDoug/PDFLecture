@@ -41,22 +41,86 @@ def manage_agents(request):
         db = get_firestore_client()
         collection_name = 'agents' # Dedicated collection for agents
         
-        # GET: List or Retrieve
         if request.method == 'GET':
             agent_id = request.args.get('agentId')
             
+            # Define built-in agents (mirrors script_generator/agents.py)
+            built_in_agents = [
+                {
+                    "agentId": "prof-classics-001",
+                    "name": "Professor Classics",
+                    "description": "Formal, structured, academic",
+                    "personality": {
+                        "traits": ["formal", "structured", "academic", "patience"],
+                        "teaching_style": "Socratic method, highly structured, clear explanations",
+                        "tone": "Academic and formal",
+                        "humor_level": "low"
+                    },
+                    "voice": {"provider": "google", "voice_id": "en-US-Journey-D"},
+                    "is_builtin": True
+                },
+                {
+                    "agentId": "dr-straightforward-001",
+                    "name": "Dr. Straightforward",
+                    "description": "Direct, concise, no-nonsense",
+                    "personality": {
+                        "traits": ["direct", "concise", "clear", "efficient"],
+                        "teaching_style": "Bullet points, key takeaways, no fluff",
+                        "tone": "Professional and direct",
+                        "humor_level": "none"
+                    },
+                    "voice": {"provider": "google", "voice_id": "en-US-Journey-F"},
+                    "is_builtin": True
+                },
+                {
+                    "agentId": "coach-motivator-001",
+                    "name": "Coach Motivator",
+                    "description": "Encouraging, enthusiastic, practical",
+                    "personality": {
+                        "traits": ["enthusiastic", "supportive", "energetic", "practical"],
+                        "teaching_style": "Encourages the learner, frames challenges as opportunities",
+                        "tone": "High energy and motivational",
+                        "humor_level": "moderate"
+                    },
+                    "voice": {"provider": "google", "voice_id": "en-US-Studio-M"},
+                    "is_builtin": True
+                },
+                {
+                    "agentId": "lit-reviewer-001",
+                    "name": "Dr. Aris (Fiction)",
+                    "description": "Scholarly literary critic for fiction analysis",
+                    "personality": {
+                        "traits": ["scholarly", "analytical", "eloquent", "nuanced"],
+                        "teaching_style": "Deep literary analysis focusing on themes, narrative structure",
+                        "tone": "Academic, thoughtful, and critical",
+                        "humor_level": "low"
+                    },
+                    "voice": {"provider": "google", "voice_id": "en-GB-Neural2-D"},
+                    "is_builtin": True
+                }
+            ]
+            
+            # Convert built-ins to dict for easy merging
+            agents_map = {a['agentId']: a for a in built_in_agents}
+
             if agent_id:
+                # Try Firestore first (override)
                 doc = db.collection(collection_name).document(agent_id).get()
-                if not doc.exists:
+                if doc.exists:
+                    return (json.dumps(doc.to_dict()), 200, cors_headers())
+                elif agent_id in agents_map:
+                    return (json.dumps(agents_map[agent_id]), 200, cors_headers())
+                else:
                     return ({'error': 'Agent not found'}, 404, cors_headers())
-                return (json.dumps(doc.to_dict()), 200, cors_headers())
             else:
-                # List all
-                agents = []
+                # List all (merge Firestore over built-ins)
                 docs = db.collection(collection_name).stream()
                 for doc in docs:
-                    agents.append(doc.to_dict())
-                return (json.dumps({'agents': agents}), 200, cors_headers())
+                    data = doc.to_dict()
+                    if 'agentId' in data:
+                        agents_map[data['agentId']] = data
+                
+                return (json.dumps({'agents': list(agents_map.values())}), 200, cors_headers())
 
         # POST: Create or Update
         elif request.method == 'POST':
