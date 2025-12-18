@@ -1,0 +1,4 @@
+functions-framework==3.*
+pypdf==5.1.0
+flask==3.0.3
+werkzeug==3.0.3

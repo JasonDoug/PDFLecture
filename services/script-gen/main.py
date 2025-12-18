@@ -60,7 +60,7 @@ def generate_section_script(section: Dict[str, Any], agent, document_type: str =
     genai.configure(api_key=api_key)
     
     model = genai.GenerativeModel(
-        'gemini-2.5-flash',
+        'gemini-3.0-flash',
         system_instruction=agent.system_prompt
     )
     
@@ -101,8 +101,19 @@ def generate_section_script(section: Dict[str, Any], agent, document_type: str =
     - Length: Under {agent.script_config.max_section_length} words.
     """
     
-    response = model.generate_content(prompt)
-    return response.text
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            'temperature': 0.7,
+        }
+    )
+    
+    usage = {
+        'prompt_tokens': getattr(response.usage_metadata, 'prompt_token_count', 0),
+        'candidates_tokens': getattr(response.usage_metadata, 'candidates_token_count', 0)
+    }
+    
+    return response.text, usage
 
 @functions_framework.cloud_event
 def generate_script(cloud_event):
@@ -174,6 +185,7 @@ def generate_script(cloud_event):
         prev_context = ""
         
         total_sections = len(sections)
+        total_script_cost = 0.0
         for i, section in enumerate(sections):
             print(f"Generating section {i+1}/{total_sections}")
             
@@ -184,12 +196,18 @@ def generate_script(cloud_event):
                 'progress.message': f'Writing section {i+1} of {total_sections}...'
             })
             
-            script_text = generate_section_script(section, agent, document_type, prev_context)
+            script_text, usage = generate_section_script(section, agent, document_type, prev_context)
+            
+            # Calculate cost for this section
+            section_cost = (usage['prompt_tokens'] * 0.5e-6) + (usage['candidates_tokens'] * 3.0e-6)
+            total_script_cost += section_cost
             
             full_script.append({
                 'title': section.get('title'),
                 'page_range': section.get('page_range'),
-                'text': script_text
+                'text': script_text,
+                'usage': usage,
+                'cost_usd': section_cost
             })
             
             # Update context (last 200 chars)
@@ -212,11 +230,14 @@ def generate_script(cloud_event):
         storage_path = upload_json_to_gcs(bucket_name, blob_name, script_data)
         
         # Update Job
+        from google.cloud import firestore
         job_ref.update({
             'script': {
                 'storage_path': storage_path,
-                'section_count': len(full_script)
+                'section_count': len(full_script),
+                'cost_usd': total_script_cost
             },
+            'total_estimated_cost_usd': firestore.Increment(total_script_cost),
             'status': 'generating_audio', # Next step
             'progress.current_step': 'generating_audio',
             'progress.percentage': 60,

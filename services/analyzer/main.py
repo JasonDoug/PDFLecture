@@ -75,8 +75,8 @@ def analyze_document_with_gemini(pdf_content: bytes) -> Dict[str, Any]:
     # Configure Gemini
     genai.configure(api_key=api_key)
     
-    # Use gemini-2.5-flash as default, or fallback/upgrade based on env
-    model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+    # Use gemini-3.0-flash as default
+    model_name = os.environ.get('GEMINI_MODEL', 'gemini-3.0-flash')
     model = genai.GenerativeModel(
         model_name,
         system_instruction="You are an expert document analyzer."
@@ -184,18 +184,25 @@ Be thorough in analyzing the content structure."""
                  text = text.split("```")[1].split("```")[0]
              analysis = json.loads(text)
              
-        # Add metadata
+        # Add metadata and calculate cost
+        usage_metadata = {}
+        cost = 0.0
         if hasattr(response, 'usage_metadata'):
             usage_metadata = {
                 'prompt_token_count': getattr(response.usage_metadata, 'prompt_token_count', 0),
                 'candidates_token_count': getattr(response.usage_metadata, 'candidates_token_count', 0),
                 'total_token_count': getattr(response.usage_metadata, 'total_token_count', 0),
             }
-            print(f"Usage metadata: {usage_metadata}")
+            # Gemini 3.0 Flash Pricing: $0.50/1M input, $3.00/1M output
+            input_cost = usage_metadata['prompt_token_count'] * 0.5e-6
+            output_cost = usage_metadata['candidates_token_count'] * 3.0e-6
+            cost = input_cost + output_cost
+            print(f"Usage metadata: {usage_metadata}, Estimated Cost: ${cost:.6f}")
             
         analysis['_metadata'] = {
             'model': model_name,
             'usage': usage_metadata,
+            'cost_usd': cost,
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'file_uri': uploaded_file.uri,
             'method': 'vision'
@@ -236,9 +243,21 @@ Be thorough in analyzing the content structure."""
                  text = text.split("```")[1].split("```")[0]
              analysis = json.loads(text)
              
-        # Add metadata
+        # Add metadata and cost for fallback
+        usage_metadata = {}
+        cost = 0.0
+        if hasattr(response, 'usage_metadata'):
+            usage_metadata = {
+                'prompt_token_count': getattr(response.usage_metadata, 'prompt_token_count', 0),
+                'candidates_token_count': getattr(response.usage_metadata, 'candidates_token_count', 0),
+                'total_token_count': getattr(response.usage_metadata, 'total_token_count', 0),
+            }
+            cost = (usage_metadata['prompt_token_count'] * 0.5e-6) + (usage_metadata['candidates_token_count'] * 3.0e-6)
+
         analysis['_metadata'] = {
             'model': model_name,
+            'usage': usage_metadata,
+            'cost_usd': cost,
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'method': 'text_fallback'
         }
@@ -273,17 +292,20 @@ def update_job_status(job_id: str, analysis: Dict[str, Any], storage_path: str, 
     job_ref = db.collection(collection_name).document(job_id)
     
     if success:
+        analysis_data = {
+            'status': 'completed',
+            'main_topics': analysis.get('main_topics', []),
+            'difficulty': analysis.get('difficulty_level', 'unknown'),
+            'storage_path': storage_path,
+            'summary': analysis.get('summary', ''),
+            'section_count': len(analysis.get('suggested_sections', [])),
+            'cost_usd': analysis.get('_metadata', {}).get('cost_usd', 0.0)
+        }
         update_data = {
             'status': 'analyzed',
             'updated_at': datetime.utcnow().isoformat() + 'Z',
-            'analysis': {
-                'status': 'completed',
-                'main_topics': analysis.get('main_topics', []),
-                'difficulty': analysis.get('difficulty_level', 'unknown'),
-                'storage_path': storage_path,
-                'summary': analysis.get('summary', ''),
-                'section_count': len(analysis.get('suggested_sections', []))
-            },
+            'analysis': analysis_data,
+            'total_estimated_cost_usd': analysis_data['cost_usd'],
             'progress': {
                 'current_step': 'analyzed',
                 'percentage': 30,

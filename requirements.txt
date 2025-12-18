@@ -19,3 +19,4 @@ flask-cors==4.*
 # Utilities
 python-dotenv==1.0.*
 pypdf==3.*
+requests

@@ -1,0 +1,49 @@
+Preparing function...
+.done.
+Deploying function...
+[Build]..................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................done
+[Service].....................................................................................done
+Done.
+You can view your function in the Cloud Console here: https://console.cloud.google.com/functions/details/us-west1/extract_pdf?project=pdf2audiobook-477309
+
+buildConfig:
+  automaticUpdatePolicy: {}
+  build: projects/852565109955/locations/us-west1/builds/af7f56ae-fc11-4914-b136-0ba6ae994cdd
+  dockerRegistry: ARTIFACT_REGISTRY
+  dockerRepository: projects/pdf2audiobook-477309/locations/us-west1/repositories/gcf-artifacts
+  entryPoint: extract_pdf
+  runtime: python310
+  serviceAccount: projects/pdf2audiobook-477309/serviceAccounts/852565109955-compute@developer.gserviceaccount.com
+  source:
+    storageSource:
+      bucket: gcf-v2-sources-852565109955-us-west1
+      generation: '1766045997056959'
+      object: extract_pdf/function-source.zip
+  sourceProvenance:
+    resolvedStorageSource:
+      bucket: gcf-v2-sources-852565109955-us-west1
+      generation: '1766045997056959'
+      object: extract_pdf/function-source.zip
+createTime: '2025-12-18T08:19:57.340306475Z'
+environment: GEN_2
+labels:
+  deployment-tool: cli-gcloud
+name: projects/pdf2audiobook-477309/locations/us-west1/functions/extract_pdf
+satisfiesPzi: true
+serviceConfig:
+  allTrafficOnLatestRevision: true
+  availableCpu: '0.5833'
+  availableMemory: 1Gi
+  environmentVariables:
+    GCP_PROJECT_ID: pdf2audiobook-477309
+    LOG_EXECUTION_ID: 'true'
+  ingressSettings: ALLOW_ALL
+  maxInstanceRequestConcurrency: 1
+  revision: extract-pdf-00001-miy
+  service: projects/pdf2audiobook-477309/locations/us-west1/services/extract-pdf
+  serviceAccountEmail: 852565109955-compute@developer.gserviceaccount.com
+  timeoutSeconds: 60
+  uri: https://extract-pdf-xyaszg3aua-uw.a.run.app
+state: ACTIVE
+updateTime: '2025-12-18T08:20:53.076425537Z'
+url: https://us-west1-pdf2audiobook-477309.cloudfunctions.net/extract_pdf
