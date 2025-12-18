@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Lecture Player</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <span class="logo-icon">🎧</span>
+                <h1>PDF Lecture</h1>
+            </div>
+            <div class="status-badge" id="global-status" style="display: none;">Ready</div>
+        </header>
+
+        <!-- View: Upload -->
+        <section id="upload-view" class="view active">
+            <div class="hero">
+                <h2>Turn any PDF into an engaging audio lecture</h2>
+                <p>Upload your documents and let AI professors teach you.</p>
+            </div>
+            
+            <div class="agent-selection-container">
+                <label for="agent-select">Select your Professor:</label>
+                <select id="agent-select" class="agent-select">
+                    <option value="" disabled selected>Loading professors...</option>
+                </select>
+            </div>
+            
+            <div class="upload-zone" id="drop-zone">
+                <div class="upload-content">
+                    <div class="upload-icon">📄</div>
+                    <h3>Drop your PDF here</h3>
+                    <p>or click to browse</p>
+                    <input type="file" id="file-input" accept="application/pdf" hidden>
+                </div>
+                <div class="upload-loading" id="upload-loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Uploading...</p>
+                </div>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="icon">🤖</div>
+                    <h4>AI Analysis</h4>
+                    <p>Deep understanding of document structure and concepts.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">✍️</div>
+                    <h4>Script Generation</h4>
+                    <p>Engaging scripts written by expert personas.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🎙️</div>
+                    <h4>Natural Audio</h4>
+                    <p>Lifelike speech with synchronized text.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- View: Processing -->
+        <section id="processing-view" class="view">
+            <div class="processing-container">
+                <div class="document-info">
+                    <div class="doc-icon">📄</div>
+                    <div class="doc-details">
+                        <h3 id="proc-filename">document.pdf</h3>
+                        <span id="proc-size">2.5 MB</span>
+                    </div>
+                </div>
+
+                <div class="progress-section">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-status">
+                        <span id="progress-message">Initializing...</span>
+                        <span id="progress-percent">0%</span>
+                    </div>
+                </div>
+
+                <div class="steps-timeline">
+                    <div class="step completed" id="step-upload">
+                        <div class="step-icon">✓</div>
+                        <div class="step-label">Upload</div>
+                    </div>
+                    <div class="step" id="step-analyze">
+                        <div class="step-icon">2</div>
+                        <div class="step-label">Analysis</div>
+                    </div>
+                    <div class="step" id="step-script">
+                        <div class="step-icon">3</div>
+                        <div class="step-label">Scripting</div>
+                    </div>
+                    <div class="step" id="step-audio">
+                        <div class="step-icon">4</div>
+                        <div class="step-label">Audio</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- View: Player -->
+        <section id="player-view" class="view">
+            <div class="player-layout">
+                <!-- Sidebar: ToC -->
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <h3>Sections</h3>
+                    </div>
+                    <ul class="toc-list" id="toc-list">
+                        <!-- ToC Items injected here -->
+                    </ul>
+                </aside>
+
+                <!-- Main Content: Transcript -->
+                <main class="transcript-container">
+                    <div class="transcript-header">
+                        <h2 id="current-section-title">Introduction</h2>
+                    </div>
+                    <div class="transcript-content" id="transcript-content">
+                        <!-- Words injected here -->
+                        <p class="placeholder-text">Select a section to begin...</p>
+                    </div>
+                </main>
+            </div>
+
+            <!-- Footer: Audio Controls -->
+            <footer class="audio-controls">
+                <input type="range" class="seek-slider" id="seek-slider" value="0" min="0" max="100">
+                
+                <div class="control-row">
+                    <div class="time-display">
+                        <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+                    </div>
+
+                    <div class="main-buttons">
+                        <button class="btn-icon" id="btn-prev">⏮</button>
+                        <button class="btn-play" id="btn-play">▶</button>
+                        <button class="btn-icon" id="btn-next">⏭</button>
+                    </div>
+
+                    <div class="volume-speed">
+                        <select id="speed-select">
+                            <option value="0.75">0.75x</option>
+                            <option value="1" selected>1.0x</option>
+                            <option value="1.25">1.25x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2">2.0x</option>
+                        </select>
+                    </div>
+                </div>
+                <audio id="audio-element" hidden></audio>
+            </footer>
+        </section>
+    </div>
+
+    <!-- Configuration Overlay (Optional, for demo) -->
+    <script src="config.js"></script>
+    <!-- App Logic -->
+    <script src="app.js"></script>
+</body>
+</html>

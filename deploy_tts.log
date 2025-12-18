@@ -1,0 +1,54 @@
+Preparing function...
+.done.
+Deploying function...
+[Build].....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................done
+[Service].................................................................................................................................done
+Done.
+You can view your function in the Cloud Console here: https://console.cloud.google.com/functions/details/us-west1/synthesize_text?project=pdf2audiobook-477309
+
+buildConfig:
+  automaticUpdatePolicy: {}
+  build: projects/852565109955/locations/us-west1/builds/9fd4c9ac-be94-495b-b0f9-c9d7f7908e9d
+  dockerRegistry: ARTIFACT_REGISTRY
+  dockerRepository: projects/pdf2audiobook-477309/locations/us-west1/repositories/gcf-artifacts
+  entryPoint: synthesize_text
+  runtime: python310
+  serviceAccount: projects/pdf2audiobook-477309/serviceAccounts/852565109955-compute@developer.gserviceaccount.com
+  source:
+    storageSource:
+      bucket: gcf-v2-sources-852565109955-us-west1
+      generation: '1766045999521804'
+      object: synthesize_text/function-source.zip
+  sourceProvenance:
+    resolvedStorageSource:
+      bucket: gcf-v2-sources-852565109955-us-west1
+      generation: '1766045999521804'
+      object: synthesize_text/function-source.zip
+createTime: '2025-12-18T08:19:59.760129134Z'
+environment: GEN_2
+labels:
+  deployment-tool: cli-gcloud
+name: projects/pdf2audiobook-477309/locations/us-west1/functions/synthesize_text
+satisfiesPzi: true
+serviceConfig:
+  allTrafficOnLatestRevision: true
+  availableCpu: '0.3333'
+  availableMemory: 512M
+  environmentVariables:
+    GCP_PROJECT_ID: pdf2audiobook-477309
+    LOG_EXECUTION_ID: 'true'
+  ingressSettings: ALLOW_ALL
+  maxInstanceRequestConcurrency: 1
+  revision: synthesize-text-00001-yok
+  secretEnvironmentVariables:
+  - key: ELEVENLABS_API_KEY
+    projectId: '852565109955'
+    secret: ELEVENLABS_API_KEY
+    version: latest
+  service: projects/pdf2audiobook-477309/locations/us-west1/services/synthesize-text
+  serviceAccountEmail: 852565109955-compute@developer.gserviceaccount.com
+  timeoutSeconds: 60
+  uri: https://synthesize-text-xyaszg3aua-uw.a.run.app
+state: ACTIVE
+updateTime: '2025-12-18T08:21:13.750787509Z'
+url: https://us-west1-pdf2audiobook-477309.cloudfunctions.net/synthesize_text

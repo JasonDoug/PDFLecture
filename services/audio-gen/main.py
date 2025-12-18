@@ -11,9 +11,12 @@ def get_storage_client():
     from google.cloud import storage
     return storage.Client()
 
+from google.cloud import firestore
+
 def get_firestore_client():
-    from google.cloud import firestore
     return firestore.Client()
+
+
 
 # pubsub_v1 is not used in this file, so it can be removed if not needed elsewhere.
 # For now, keeping it as it was not explicitly removed by the instruction.
@@ -125,6 +128,7 @@ def generate_audio(cloud_event):
         bucket_name = os.environ.get('GCS_BUCKET_NAME', 'pdf-lecture-uploads')
         audio_results = []
         total_duration = 0.0
+        total_audio_cost = 0.0
         
         for i, section in enumerate(sections):
             section_id = section.get('section_id', i+1)
@@ -139,6 +143,22 @@ def generate_audio(cloud_event):
             # Generate Audio
             try:
                 result = provider.generate_audio(text, tts_config)
+                
+                # Calculate TTS Cost (2025 Pricing)
+                char_count = len(text)
+                if tts_config.provider == 'google':
+                     # Journey/Chirp HD: $30.00/1M chars, Studio: $160.00/1M chars
+                     # We use a blend or check voice name for precision
+                     if 'Studio' in tts_config.voice_id:
+                         section_audio_cost = char_count * 160.0e-6
+                     else:
+                         # Default to Journey/Chirp HD rate
+                         section_audio_cost = char_count * 30.0e-6
+                else:
+                     # ElevenLabs: $0.20 per 1k = $200.00 per 1M characters
+                     section_audio_cost = char_count * 200.0e-6
+                
+                total_audio_cost += section_audio_cost
             except Exception as e:
                 print(f"Error generating audio for section {section_id}: {e}")
                 raise
@@ -157,7 +177,9 @@ def generate_audio(cloud_event):
                 "section_id": section_id,
                 "audio_path": gcs_audio_uri,
                 "timestamps_path": gcs_time_uri,
-                "duration_seconds": result.duration_seconds
+                "duration_seconds": result.duration_seconds,
+                "characters": char_count,
+                "cost_usd": section_audio_cost
             })
             
             # Update progress
@@ -174,8 +196,10 @@ def generate_audio(cloud_event):
             'audio': {
                 'status': 'completed',
                 'total_duration_seconds': total_duration,
-                'sections': audio_results
+                'sections': audio_results,
+                'cost_usd': total_audio_cost
             },
+            'total_estimated_cost_usd': firestore.Increment(total_audio_cost),
             'progress': {
                 'current_step': 'completed',
                 'percentage': 100,
