@@ -1,177 +1,84 @@
-# PDF-to-Lecture Service
+# 🎙️ Audio Intelligence Suite
 
-Serverless platform that transforms PDF documents into engaging audio lectures using AI.
+**Audio Intelligence Suite** is a production-grade monorepo designed to transform physical and digital documents into high-fidelity audio experiences. Bringing together Gemini for deep analysis and Google Cloud Text-to-Speech (Journey/Studio) for narration, the suite offers two specialized modes: **University Lecture** and **Premium Audiobook**.
 
-## Features
+---
 
-- 📄 PDF Upload & Storage
-- 🤖 AI-powered document analysis with Gemini vision model
-- 📝 Intelligent lecture script generation
-- 🎙️ Text-to-speech audio generation
-- 🎯 Word-level highlighting synchronized with audio
+## 🏗️ Architecture
 
-## Architecture
+```mermaid
+graph TD
+    A[Portal Launcher] --> B[University Lecture Mode]
+    A --> C[Premium Audiobook Mode]
 
-Built on Google Cloud Platform:
-- **Cloud Functions (Gen 2)**: Serverless compute
-- **Cloud Storage**: PDF and audio file storage
-- **Firestore**: Job metadata and state management
-- **Pub/Sub**: Event-driven processing pipeline
-- **Gemini API**: Document understanding
+    subgraph "Backend Pipeline (GCP)"
+        D[Orchestrator] --> E[PDF Processor]
+        D --> F[Doc Analyzer (Gemini)]
+        D --> G[Script Generator (Gemini)]
+        D --> H[Audio Generator (TTS)]
+        H --> I[(Firestore Cost Tracking)]
+        H --> J[(GCS Storage)]
+    end
 
-## Prerequisites
+    B --> D
+    C --> D
+```
 
-- Python 3.12+
-- Google Cloud SDK (`gcloud`)
-- Google Cloud Project with billing enabled
-- Gemini API key
+---
 
-## Quick Start
+## ✨ Key Features
 
-### 1. Setup Environment
+### 🎓 University Lecture Mode
+Convert dense academic PDFs into structured, narrated lectures.
+- **Agent Personas**: Choose from "Professor Classics" or custom agents.
+- **Interactive Transcript**: Follow along with synced text highlighting.
+- **Hybrid Analysis**: Intelligent fallback to OCR if Vision analysis is blocked.
 
+### 🎧 Premium Audiobook Mode
+A cinematic reading experience designed for high-end consumption.
+- **Minimalist UI**: Indigo and Gold aesthetic with Playfair typography.
+- **Narrative Depth**: Optimized for Journey-F (Chirp HD) high-fidelity voices.
+- **Playback Controls**: 15s skip, variable speed, and offline MP3 downloads.
+
+### 💰 Cost Monitoring
+Built-in financial tracking for every job.
+- **Fine-grained usage**: Tracking prompt/candidate tokens and character counts.
+- **2025 Rates**: Automatically calculates estimated USD costs for Gemini 3.0 and TTS.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisite Setup
+Ensure you have the following API keys in GCP Secret Manager or in a `.env` file:
+- `GEMINI_API_KEY`
+- `ELEVENLABS_API_KEY` (Optional)
+
+### 2. Launch the Suite
+Run the local orchestrator to start the portal and dependent apps:
 ```bash
-# Clone and navigate to project
-cd PDFLecture
-
-# Copy environment template
-cp .env.example .env
-
-# Edit .env and fill in your values:
-# - GCP_PROJECT_ID
-# - GCS_BUCKET_NAME
-# - GEMINI_API_KEY
+./start_suite.sh
 ```
+Visit **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-### 2. Install Dependencies
+---
 
-```bash
-pip install -r requirements.txt
-```
+## 📖 Component Library
 
-### 3. Setup GCP Resources
+| Path | Purpose |
+| :--- | :--- |
+| `apps/portal` | The landing page entry point. |
+| `apps/lecture` | The academic lecture frontend. |
+| `apps/audiobook` | The premium audiobook frontend. |
+| `services/` | Python microservices (FastAPI/Functions Framework). |
+| `docs/` | Detailed Developer and Usage guides. |
 
-```bash
-# Make scripts executable
-chmod +x *.sh
+---
 
-# Run setup (creates bucket, Firestore, Pub/Sub topic, etc.)
-./setup_gcp.sh
-```
+## 🛡️ License
+Distributed under the MIT License. See `LICENSE` for more information.
 
-### 4. Local Development
+---
 
-```bash
-# Start local development servers
-./run_local.sh
-
-# In another terminal, test with a PDF
-./test_upload.sh path/to/sample.pdf
-```
-
-The local server runs two endpoints:
-- Upload: `http://localhost:8080`
-- Analyzer: `http://localhost:8081/analyze`
-
-### 5. Deploy to Production
-
-```bash
-# Store Gemini API key in Secret Manager
-echo -n 'your-gemini-api-key' | gcloud secrets create GEMINI_API_KEY --data-file=-
-
-# Grant access to the secret
-gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
-  --member="serviceAccount:$GCP_PROJECT_ID@appspot.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
-
-# Deploy functions
-./deploy.sh
-```
-
-## API Usage
-
-### Upload PDF
-
-```bash
-curl -X POST \
-  -F "file=@document.pdf" \
-  https://YOUR-FUNCTION-URL/upload
-```
-
-Response:
-```json
-{
-  "success": true,
-  "jobId": "job-uuid-123",
-  "message": "PDF uploaded successfully",
-  "pdf": {
-    "filename": "document.pdf",
-    "size_mb": 2.5
-  },
-  "status": "processing"
-}
-```
-
-### Check Job Status
-
-Query Firestore for job status:
-```javascript
-const job = await firestore
-  .collection('lecture-jobs')
-  .doc(jobId)
-  .get();
-```
-
-## Project Structure
-
-```
-PDFLecture/
-├── upload_handler/
-│   └── main.py              # PDF upload function
-├── document_analyzer/
-│   └── main.py              # Gemini document analysis
-├── script_generator/
-│   ├── main.py              # Script generation function
-│   └── agents.py            # Agent persona definitions
-├── requirements.txt         # Python dependencies
-├── .env.example            # Environment template
-├── setup_gcp.sh            # GCP infrastructure setup
-├── deploy.sh               # Deployment script
-├── run_local.sh            # Local development
-└── test_upload.sh          # Test script
-```
-
-## Data Flow
-
-1. **Upload**: PDF uploaded to Cloud Storage, job created in Firestore
-2. **Trigger**: Pub/Sub message sent to analyzer
-3. **Analysis**: Gemini vision model analyzes PDF comprehensively
-4. **Store**: Analysis saved to Cloud Storage and Firestore
-5. **Script**: Agent persona generates spoken script in chunks
-6. **Store**: Script saved to Cloud Storage and Firestore
-7. **Next**: Audio generation (TODO)
-6. **Audio**: TTS generation (TODO)
-7. **Complete**: Audio ready for playback
-
-## Cost Estimates
-
-Per 20-page PDF lecture:
-- Cloud Functions: $0.05-0.10
-- Gemini API: $0.05-0.10
-- Cloud Storage: $0.01/month
-- **Total**: ~$0.10-0.20 per lecture
-
-## Development Status
-
-- [x] PDF upload handler
-- [x] Document analysis with Gemini
-- [x] Script generation service
-- [x] Agent management (embedded in script generator)
-- [ ] Audio generation (TTS)
-- [ ] Audio generation (TTS)
-- [ ] Interactive web player
-- [ ] Status polling endpoint
-
-## License
-
-MIT
+## 🤝 Contributing
+Contributions are welcome! Please see `CONTRIBUTING.md` for our branching strategy and pull request process.
