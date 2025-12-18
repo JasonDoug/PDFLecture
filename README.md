@@ -8,16 +8,18 @@
 
 ```mermaid
 graph TD
-    A[Portal Launcher] --> B[University Lecture Mode]
-    A --> C[Premium Audiobook Mode]
+    A["Portal Launcher"] --> B["University Lecture Mode"]
+    A --> C["Premium Audiobook Mode"]
 
     subgraph "Backend Pipeline (GCP)"
-        D[Orchestrator] --> E[PDF Processor]
-        D --> F[Doc Analyzer (Gemini)]
-        D --> G[Script Generator (Gemini)]
-        D --> H[Audio Generator (TTS)]
-        H --> I[(Firestore Cost Tracking)]
-        H --> J[(GCS Storage)]
+        D["Orchestrator"] --> E["PDF Processor"]
+        D --> F["Doc Analyzer (Gemini)"]
+        D --> G["Script Generator (Gemini)"]
+        D --> H["Audio Generator (TTS)"]
+        I[("Firestore Cost Tracking")]
+        J[("GCS Storage")]
+        H --> I
+        H --> J
     end
 
     B --> D
