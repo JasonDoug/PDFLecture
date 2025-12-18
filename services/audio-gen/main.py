@@ -15,6 +15,8 @@ def get_firestore_client():
     from google.cloud import firestore
     return firestore.Client()
 
+from google.cloud import firestore
+
 # pubsub_v1 is not used in this file, so it can be removed if not needed elsewhere.
 # For now, keeping it as it was not explicitly removed by the instruction.
 # from google.cloud import pubsub_v1
@@ -141,11 +143,16 @@ def generate_audio(cloud_event):
             try:
                 result = provider.generate_audio(text, tts_config)
                 
-                # Calculate TTS Cost
+                # Calculate TTS Cost (2025 Pricing)
                 char_count = len(text)
                 if tts_config.provider == 'google':
-                     # Journey/Studio models: $16.00 per 1M characters
-                     section_audio_cost = char_count * 16.0e-6
+                     # Journey/Chirp HD: $30.00/1M chars, Studio: $160.00/1M chars
+                     # We use a blend or check voice name for precision
+                     if 'Studio' in tts_config.voice_id:
+                         section_audio_cost = char_count * 160.0e-6
+                     else:
+                         # Default to Journey/Chirp HD rate
+                         section_audio_cost = char_count * 30.0e-6
                 else:
                      # ElevenLabs: $0.20 per 1k = $200.00 per 1M characters
                      section_audio_cost = char_count * 200.0e-6
@@ -182,7 +189,6 @@ def generate_audio(cloud_event):
             })
 
         # Final Update
-        from google.cloud import firestore
         job_ref.update({
             'status': 'completed',
             'updated_at': datetime.utcnow().isoformat() + 'Z',

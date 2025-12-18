@@ -24,6 +24,12 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
 
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl)
+    }
+  }, [audioUrl])
+
   const audioRef = useRef(null)
 
   // API Endpoints
@@ -79,6 +85,11 @@ function App() {
       }
       const blob = new Blob([bytes], { type: 'audio/mpeg' })
       const url = URL.createObjectURL(blob)
+
+      // Revoke previous URL to prevent memory leak
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+      }
 
       setAudioUrl(url)
       setStatus('ready')

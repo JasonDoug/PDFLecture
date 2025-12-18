@@ -16,10 +16,22 @@ def orchestrate(request: Request):
     - file: PDF file
     - tts_settings: JSON string (optional)
     """
-    # Set CORS headers for preflight
+    # Restricted CORS headers
+    # Allow from Firebase hosting or local development
+    origin = request.headers.get('Origin', '')
+    allowed_patterns = [
+        'http://localhost:',
+        'https://pdf2audiobook-477309.web.app',
+        'https://pdf2audiobook-477309.firebaseapp.com'
+    ]
+    
+    cors_origin = '*'
+    if any(origin.startswith(p) for p in allowed_patterns):
+        cors_origin = origin
+
     if request.method == 'OPTIONS':
         headers = {
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': cors_origin,
             'Access-Control-Allow-Methods': 'POST',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '3600'
@@ -27,7 +39,7 @@ def orchestrate(request: Request):
         return ('', 204, headers)
 
     headers = {
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': cors_origin
     }
 
     if request.method != 'POST':

@@ -25,6 +25,12 @@ if [ -z "$PDF_URL" ] || [ -z "$TTS_URL" ]; then
     exit 1
 fi
 
+# Basic URL Sanitization/Validation
+if [[ ! "$PDF_URL" =~ ^https?:// ]] || [[ ! "$TTS_URL" =~ ^https?:// ]]; then
+    echo "❌ URLs must start with http:// or https://"
+    exit 1
+fi
+
 echo ""
 echo "📝 Generating Production Config..."
 
@@ -38,10 +44,10 @@ echo "✅ Created apps/audiobook/.env.production"
 
 echo ""
 echo "🏗️  Building Audiobook App..."
-cd apps/audiobook
+cd apps/audiobook || { echo "❌ Failed to enter apps/audiobook"; exit 1; }
 npm install
 npm run build
-cd ../..
+cd ../.. || { echo "❌ Failed to return to root"; exit 1; }
 
 echo ""
 echo "🔥 Ready to Deploy!"

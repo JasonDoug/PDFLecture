@@ -1,0 +1,1393 @@
+**Actionable comments posted: 14**
+
+> [!NOTE]
+> Due to the large number of review comments, Critical, Major severity comments were prioritized as inline comments.
+
+<details>
+<summary>♻️ Duplicate comments (2)</summary><blockquote>
+
+<details>
+<summary>services/script-gen/main.py (2)</summary><blockquote>
+
+`63-63`: **Same model change as analyzer—verify consistency.**
+
+This file uses the same `gemini-3.0-flash` model as `services/analyzer/main.py`. Ensure this model name is valid and that the pricing rates used here (Lines 202) match the analyzer's rates for consistency.
+
+
+
+
+Refer to the verification request in `services/analyzer/main.py` at Lines 78-79 for model name validation.
+
+---
+
+`233-240`: **Consider consolidating Firestore imports (same as audio-gen).**
+
+The inline import of `firestore` at Line 233 duplicates the pattern seen in `services/audio-gen/main.py`. While functional, consider consolidating imports as suggested in the audio-gen review to improve code consistency and reduce duplication.
+
+
+
+
+Refer to the refactoring suggestion in `services/audio-gen/main.py` at Lines 185-195 for consolidation options.
+
+</blockquote></details>
+
+</blockquote></details>
+
+<details>
+<summary>🟡 Minor comments (10)</summary><blockquote>
+
+<details>
+<summary>.firebase/hosting.cHVibGljX2RlcGxveQ.cache-1-13 (1)</summary><blockquote>
+
+`1-13`: **Generated Firebase cache should not be committed.**
+
+The `.firebase` directory contains generated deployment artifacts and local CLI state that should be excluded from source control. Committing these files can lead to:
+- Unnecessary merge conflicts on every build
+- Repository bloat from frequently changing hashes
+- Confusion about deployment state across team members
+
+
+
+<details>
+<summary>🔎 Add `.firebase` to the root .gitignore:</summary>
+
+```diff
++# Firebase CLI cache and state
++.firebase/
+```
+</details>
+
+
+> Committable suggestion skipped: line range outside the PR's diff.
+
+</blockquote></details>
+<details>
+<summary>services/tts-service/requirements.txt-4-4 (1)</summary><blockquote>
+
+`4-4`: **Pin to a specific requests version to avoid known security vulnerabilities.**
+
+The `requests==2.*` specifier is overly permissive. Requests versions between 2.3.0 and 2.30.0 are vulnerable to Proxy-Authorization header forwarding and versions prior to 2.32.0 had SSL certificate verification bypass issues. Use `requests==2.32.*` or `requests==2.32.5` to ensure a secure version is installed.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/index.html-7-7 (1)</summary><blockquote>
+
+`7-7`: **Update the generic page title.**
+
+The title "frontend" is not user-friendly for browser tabs, bookmarks, or accessibility. Consider a descriptive title like "Audiobook Player" or "Premium Audiobook Experience".
+
+
+
+<details>
+<summary>🔎 Apply this diff to use a descriptive title:</summary>
+
+```diff
+-    <title>frontend</title>
++    <title>Premium Audiobook Player</title>
+```
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>public_deploy/audiobook/index.html-7-7 (1)</summary><blockquote>
+
+`7-7`: **Update the production page title.**
+
+This is the deployed HTML file served to users. The generic title "frontend" degrades user experience in browser tabs, bookmarks, and search results. A descriptive title is essential for production deployments.
+
+
+
+<details>
+<summary>🔎 Apply this diff to use a descriptive title:</summary>
+
+```diff
+-    <title>frontend</title>
++    <title>Premium Audiobook Player</title>
+```
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>deploy_hosting.sh-32-35 (1)</summary><blockquote>
+
+`32-35`: **Sanitize user input before writing to .env file.**
+
+The URLs are written directly to the `.env.production` file without validation. A malicious or malformed URL containing newlines could inject additional environment variables.
+
+<details>
+<summary>🔎 Consider adding URL format validation:</summary>
+
+```diff
++# Validate URL format
++if [[ ! "$PDF_URL" =~ ^https?:// ]] || [[ ! "$TTS_URL" =~ ^https?:// ]]; then
++    echo "❌ URLs must start with http:// or https://"
++    exit 1
++fi
++
+ echo ""
+ echo "📝 Generating Production Config..."
+```
+</details>
+
+
+> Committable suggestion skipped: line range outside the PR's diff.
+
+</blockquote></details>
+<details>
+<summary>deploy_hosting.sh-41-44 (1)</summary><blockquote>
+
+`41-44`: **Add error handling for `cd` commands to prevent silent failures.**
+
+If the directory doesn't exist or the `cd` fails, the script will continue in the wrong directory, potentially running `npm install` and `npm run build` in unintended locations.
+
+<details>
+<summary>🔎 Apply this diff:</summary>
+
+```diff
+ echo "🏗️  Building Audiobook App..."
+-cd apps/audiobook
++cd apps/audiobook || { echo "❌ Failed to enter apps/audiobook directory"; exit 1; }
+ npm install
+ npm run build
+-cd ../..
++cd ../.. || { echo "❌ Failed to return to root directory"; exit 1; }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>start_suite.sh-10-10 (1)</summary><blockquote>
+
+`10-10`: **Fix potential word splitting in environment variable loading.**
+
+The `cat .env | xargs` command is unquoted, which can cause word splitting if environment variable values contain spaces. This is flagged by shellcheck.
+
+
+
+<details>
+<summary>🔎 Apply this diff:</summary>
+
+```diff
+ if [ -f .env ]; then
+-    export $(cat .env | xargs)
++    set -a
++    source .env
++    set +a
+     echo "🔑 Environment variables loaded."
+```
+
+This approach using `source` is more robust and handles quotes/spaces correctly.
+</details>
+
+</blockquote></details>
+<details>
+<summary>services/pdf-processor/main.py-6-16 (1)</summary><blockquote>
+
+`6-16`: **Fix contradictory whitespace normalization logic.**
+
+The function first normalizes newlines (line 13: `\n+` → `\n`), but then line 15 replaces **all** whitespace including newlines with a single space (`\s+` → ` `). This makes the newline normalization ineffective. Additionally, the docstring claims hyphenation handling at line breaks, but this isn't implemented.
+
+
+
+<details>
+<summary>🔎 Suggested fix:</summary>
+
+If you want to preserve paragraph breaks, normalize newlines first, then handle spaces within lines:
+
+```diff
+ def clean_text(text: str) -> str:
+     """
+     Basic text cleaning.
+     - Removes excessive whitespace
+-    - Joins hyphenated words at line breaks (basic)
++    - Preserves paragraph breaks
+     """
+-    # Replace multiple newlines with a single newline
+-    text = re.sub(r'\n+', '\n', text)
+-    # Replace multiple spaces with single space
+-    text = re.sub(r'\s+', ' ', text)
++    # Normalize multiple newlines to double newline (paragraph break)
++    text = re.sub(r'\n\s*\n+', '\n\n', text)
++    # Replace multiple spaces/tabs with single space
++    text = re.sub(r'[ \t]+', ' ', text)
+     return text.strip()
+```
+
+Alternatively, if you prefer all text as a single line with spaces:
+
+```diff
+ def clean_text(text: str) -> str:
+     """
+     Basic text cleaning.
+-    - Removes excessive whitespace
+-    - Joins hyphenated words at line breaks (basic)
++    - Collapses all whitespace to single spaces
+     """
+-    # Replace multiple newlines with a single newline
+-    text = re.sub(r'\n+', '\n', text)
+-    # Replace multiple spaces with single space
++    # Replace all whitespace (including newlines) with single space
+     text = re.sub(r'\s+', ' ', text)
+     return text.strip()
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>public_deploy/lecture/app.js-177-195 (1)</summary><blockquote>
+
+`177-195`: **Missing error handling for non-OK status responses in polling.**
+
+The polling loop parses JSON without checking `response.ok` first. If the server returns an error status, `response.json()` might fail or return unexpected data.
+
+<details>
+<summary>Add response status check:</summary>
+
+```diff
+     state.interval = setInterval(async () => {
+         try {
+             const response = await fetch(`${CONFIG.API_ENDPOINTS.STATUS}?jobId=${state.jobId}`);
++            if (!response.ok) {
++                console.error('Status check failed:', response.status);
++                return;
++            }
+             const data = await response.json();
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/components/Tester.jsx-99-109 (1)</summary><blockquote>
+
+`99-109`: **Missing cleanup for blob URLs - potential memory leak.**
+
+`URL.createObjectURL()` creates a reference that persists until explicitly revoked. Without calling `URL.revokeObjectURL()`, repeated synthesis will leak memory.
+
+<details>
+<summary>Add cleanup:</summary>
+
+```diff
+ const processAudioResponse = (base64Audio) => {
+     addLog('Synthesis successful!', 'success')
++    // Revoke previous URL to prevent memory leak
++    if (audioUrl) {
++        URL.revokeObjectURL(audioUrl)
++    }
+     const binaryString = window.atob(base64Audio)
+     const bytes = new Uint8Array(binaryString.length)
+     for (let i = 0; i < binaryString.length; i++) {
+         bytes[i] = binaryString.charCodeAt(i)
+     }
+     const blob = new Blob([bytes], { type: 'audio/mpeg' })
+     const url = URL.createObjectURL(blob)
+     setAudioUrl(url)
+ }
+```
+
+Also add cleanup on unmount:
+
+```javascript
+import { useState, useEffect } from 'react'
+
+// Inside component:
+useEffect(() => {
+    return () => {
+        if (audioUrl) URL.revokeObjectURL(audioUrl)
+    }
+}, [audioUrl])
+```
+</details>
+
+</blockquote></details>
+
+</blockquote></details>
+
+<details>
+<summary>🧹 Nitpick comments (22)</summary><blockquote>
+
+<details>
+<summary>services/audio-gen/main.py (1)</summary><blockquote>
+
+`185-195`: **Consider consolidating Firestore imports.**
+
+The inline import of `firestore` at Line 185 is redundant since `get_firestore_client()` already imports and uses the `firestore` module. While this works, it creates unnecessary duplication.
+
+
+
+<details>
+<summary>🔎 Suggested refactor to use existing firestore module:</summary>
+
+Move the firestore import to the top of the file alongside other imports, or import Increment specifically from the lazy client initialization:
+
+**Option 1: Top-level import (cleanest)**
+```diff
+ from datetime import datetime
+ from typing import Dict, List, Any
++from google.cloud import firestore
+ 
+ import functions_framework
+```
+
+Then use it directly:
+```diff
+-        from google.cloud import firestore
+         job_ref.update({
+             'status': 'completed',
+```
+
+**Option 2: Import Increment only when needed**
+```diff
+-        from google.cloud import firestore
++        from google.cloud.firestore import Increment
+         job_ref.update({
+             ...
+-            'total_estimated_cost_usd': firestore.Increment(total_audio_cost),
++            'total_estimated_cost_usd': Increment(total_audio_cost),
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>deploy_services.sh (1)</summary><blockquote>
+
+`17-43`: **Add error handling and validation.**
+
+The deployment script lacks error handling, which means:
+- Failed deployments may go unnoticed
+- Subsequent deployments continue even if prerequisites fail
+- No validation that required secrets exist
+
+
+
+<details>
+<summary>🔎 Suggested improvements:</summary>
+
+```diff
++# Enable strict error handling
++set -euo pipefail
++
++# Validate prerequisites
++if ! gcloud secrets describe GEMINI_API_KEY &>/dev/null; then
++    echo "Error: GEMINI_API_KEY secret not found"
++    exit 1
++fi
++
++if ! gcloud secrets describe ELEVENLABS_API_KEY &>/dev/null; then
++    echo "Error: ELEVENLABS_API_KEY secret not found"
++    exit 1
++fi
++
+ deploy_service() {
+     NAME=$1
+     SOURCE=$2
+     ENTRY_POINT=$3
+     MEMORY=$4
+     TRIGGER_TYPE=${5:-"http"}
+     
+     echo "Deploying $NAME..."
+     
++    # Validate source directory exists
++    if [ ! -d "$SOURCE" ]; then
++        echo "Error: Source directory $SOURCE not found"
++        return 1
++    fi
+     
+     if [ "$TRIGGER_TYPE" == "http" ]; then
+         TRIGGER_FLAG="--trigger-http --allow-unauthenticated"
+     else
+         TRIGGER_FLAG="--trigger-topic=$TRIGGER_TYPE"
+     fi
+     
+-    gcloud functions deploy $NAME \
++    if ! gcloud functions deploy $NAME \
+         --gen2 \
+         --runtime=python310 \
+         --region=$REGION \
+         --source=$SOURCE \
+         --entry-point=$ENTRY_POINT \
+         $TRIGGER_FLAG \
+         --memory=$MEMORY \
+         --service-account=$SERVICE_ACCOUNT \
+         --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest,ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest" \
+-        --set-env-vars="GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_NAME=pdf-storage-bucket-5472,FIRESTORE_COLLECTION=pdf2lecturefb"
++        --set-env-vars="GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_NAME=pdf-storage-bucket-5472,FIRESTORE_COLLECTION=pdf2lecturefb"; then
++        echo "Error: Failed to deploy $NAME"
++        return 1
++    fi
++    echo "✅ Successfully deployed $NAME"
+ }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/README.md (1)</summary><blockquote>
+
+`1-16`: **Consider customizing the template README.**
+
+This retains the default Vite + React template content. While functional, customizing it to describe the Premium Audiobook Player specifically would improve developer onboarding.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/package.json (1)</summary><blockquote>
+
+`1-4`: **Package name should reflect its location in the monorepo.**
+
+The package is named `"frontend"` but resides in `apps/audiobook`. In a monorepo, generic names can cause confusion and potential conflicts. Consider renaming to something descriptive like `"@pdflecture/audiobook"` or `"audiobook-frontend"`.
+
+<details>
+<summary>🔎 Suggested fix:</summary>
+
+```diff
+ {
+-  "name": "frontend",
++  "name": "@pdflecture/audiobook",
+   "private": true,
+   "version": "0.0.0",
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>deploy_hosting.sh (1)</summary><blockquote>
+
+`42-43`: **Consider handling build failures.**
+
+If `npm install` or `npm run build` fails, the script continues to deploy potentially broken or missing artifacts.
+
+<details>
+<summary>🔎 Apply this diff:</summary>
+
+```diff
+-npm install
+-npm run build
++npm install || { echo "❌ npm install failed"; exit 1; }
++npm run build || { echo "❌ Build failed"; exit 1; }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>public_deploy/index.html (1)</summary><blockquote>
+
+`4-12`: **Consider adding meta description and favicon for better SEO and UX.**
+
+The page is missing a meta description tag (helpful for SEO) and a favicon reference.
+
+<details>
+<summary>🔎 Suggested additions:</summary>
+
+```diff
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
++    <meta name="description" content="Transform your documents into immersive audio experiences with AI-powered lecture and audiobook generation.">
++    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+     <title>Audio Intelligence Suite</title>
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>public_deploy/lecture/style.css (1)</summary><blockquote>
+
+`175-176`: **Minor: Clarify fallback comment or remove it.**
+
+The comment references `--surface-light` as a fallback, but the code uses `--card-bg` directly. If `--surface-light` was considered as an alternative, either define it in `:root` or remove the comment to avoid confusion.
+
+</blockquote></details>
+<details>
+<summary>services/pdf-processor/main.py (1)</summary><blockquote>
+
+`54-56`: **Consider more specific exception handling.**
+
+Catching bare `Exception` can mask unexpected errors. While acceptable for top-level error handlers in Cloud Functions, consider logging more context (e.g., traceback) or catching specific exceptions like `PdfReadError` for better diagnostics.
+
+
+
+<details>
+<summary>🔎 Example with traceback logging:</summary>
+
+```diff
++    import traceback
++
+     except Exception as e:
+-        print(f"Error processing PDF: {e}")
++        print(f"Error processing PDF: {e}")
++        print(traceback.format_exc())
+         return jsonify({'error': str(e)}), 500
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>services/orchestrator/main.py (1)</summary><blockquote>
+
+`98-100`: **Consider more granular exception handling.**
+
+Similar to the PDF processor, catching bare `Exception` can obscure the root cause of failures. Consider catching specific exceptions (e.g., `requests.RequestException`, `json.JSONDecodeError`) and logging stack traces for debugging.
+
+</blockquote></details>
+<details>
+<summary>start_suite.sh (2)</summary><blockquote>
+
+`53-57`: **Handle potentially unset PID_FRONT2 in cleanup.**
+
+If the audiobook directory doesn't exist (line 40-45), `PID_FRONT2` remains unset. While `kill` will only emit a warning for an unset variable, it's cleaner to handle this explicitly.
+
+
+
+<details>
+<summary>🔎 Suggested improvement:</summary>
+
+```diff
+ cleanup() {
+     echo "Shutting down all services..."
+-    kill $PID_BACK1 $PID_BACK2 $PID_FRONT1 $PID_FRONT2 $PID_PORTAL 2>/dev/null
++    pids="$PID_BACK1 $PID_BACK2 $PID_FRONT1 $PID_PORTAL"
++    [ -n "$PID_FRONT2" ] && pids="$pids $PID_FRONT2"
++    kill $pids 2>/dev/null
+     exit
+ }
+```
+</details>
+
+---
+
+`25-50`: **Consider adding service health checks.**
+
+The script starts all services in the background but doesn't verify they started successfully. If a service fails to bind to its port (e.g., port already in use), the script will report success but the service won't be available.
+
+
+
+Consider adding brief health checks after starting each service:
+
+```bash
+# After starting a service:
+sleep 2
+if ! curl -sf http://localhost:9200 > /dev/null 2>&1; then
+    echo "⚠️  PDF Processor failed to start"
+fi
+```
+
+Alternatively, use `wait` with timeouts and check exit codes.
+
+</blockquote></details>
+<details>
+<summary>public_deploy/style.css (1)</summary><blockquote>
+
+`99-99`: **Consider backdrop-filter browser support.**
+
+`backdrop-filter: blur(10px)` provides the glassmorphism effect but has limited support in older browsers (Firefox required enabling a flag until recently). Consider adding a fallback background color for unsupported browsers.
+
+<details>
+<summary>Optional fallback for older browsers:</summary>
+
+```diff
+ .card {
+     background: var(--card-bg);
++    /* Fallback for browsers without backdrop-filter support */
++    @supports not (backdrop-filter: blur(10px)) {
++        background: rgba(30, 30, 40, 0.95);
++    }
+     border: 1px solid rgba(255, 255, 255, 0.05);
+     border-radius: 20px;
+     padding: 3rem 2rem;
+     text-decoration: none;
+     color: inherit;
+     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+     position: relative;
+     backdrop-filter: blur(10px);
+     overflow: hidden;
+ }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>services/tts-service/main.py (2)</summary><blockquote>
+
+`78-82`: **Chunking may split words mid-text.**
+
+The current chunking splits text at fixed character boundaries, which could break words and affect TTS pronunciation quality. Consider splitting at sentence or paragraph boundaries.
+
+<details>
+<summary>Suggested improvement for sentence-aware chunking:</summary>
+
+```diff
+-    # Simple chunking by length - could be improved by splitting at sentences
+-    chunks = [text[i:i+MAX_CHARS] for i in range(0, len(text), MAX_CHARS)]
++    # Split at sentence boundaries to avoid breaking words
++    import re
++    sentences = re.split(r'(?<=[.!?])\s+', text)
++    chunks = []
++    current_chunk = ""
++    for sentence in sentences:
++        if len(current_chunk) + len(sentence) + 1 <= MAX_CHARS:
++            current_chunk += (" " + sentence if current_chunk else sentence)
++        else:
++            if current_chunk:
++                chunks.append(current_chunk)
++            current_chunk = sentence[:MAX_CHARS] if len(sentence) > MAX_CHARS else sentence
++    if current_chunk:
++        chunks.append(current_chunk)
+```
+</details>
+
+---
+
+`110-144`: **Update ElevenLabs implementation to use chunking for consistency with Google implementation.**
+
+The current ElevenLabs function sends all text in a single request without chunking. For consistency with the Google implementation and to handle edge cases with larger text volumes, consider implementing chunking similar to Google's approach. The ElevenLabs API supports up to 10,000 characters per request with the monolingual and multilingual models, which provides a reasonable buffer. Additionally, the eleven_monolingual_v1 model is deprecated and will be removed in the future—consider migrating to a newer model (e.g., eleven_multilingual_v2) as part of any refactoring.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/App.jsx (4)</summary><blockquote>
+
+`74-81`: **Duplicate base64-to-blob conversion logic.**
+
+This base64 decoding logic is duplicated in `Tester.jsx` (lines 99-108). Consider extracting this into a shared utility function.
+
+<details>
+<summary>Extract to shared utility:</summary>
+
+```javascript
+// utils/audio.js
+export function base64ToAudioBlobUrl(base64Audio) {
+  const binaryString = window.atob(base64Audio)
+  const bytes = new Uint8Array(binaryString.length)
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  const blob = new Blob([bytes], { type: 'audio/mpeg' })
+  return URL.createObjectURL(blob)
+}
+```
+</details>
+
+---
+
+`85-88`: **Consider improving error UX.**
+
+Using `alert()` for error display is functional but provides a poor user experience. Consider using a toast notification or inline error state that integrates with the UI design.
+
+---
+
+`91-98`: **Add null check before accessing audioRef.current.**
+
+`togglePlay` accesses `audioRef.current` directly. While unlikely to be null in normal flow, adding a guard improves robustness.
+
+<details>
+<summary>Suggested fix:</summary>
+
+```diff
+ const togglePlay = () => {
++   if (!audioRef.current) return
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+```
+</details>
+
+---
+
+`185-192`: **Consider accessibility for audio player.**
+
+The hidden `<audio>` element with `autoPlay` is functional but consider adding `aria-label` or ensuring screen readers can access playback state. The `autoPlay` may also be unexpected for some users.
+
+</blockquote></details>
+<details>
+<summary>public_deploy/lecture/app.js (3)</summary><blockquote>
+
+`305-334`: **Performance concern: O(n) timestamp iteration on every timeupdate.**
+
+`updateTime` iterates through all timestamps on every `timeupdate` event (fires ~4 times/second). For long transcripts, this could cause performance issues. Consider using binary search or tracking the current word index.
+
+<details>
+<summary>Optimization using tracked index:</summary>
+
+```diff
++// Add to state
++state.currentWordIndex = 0;
+
+ function updateTime() {
+     const time = dom.audio.currentTime;
+     dom.currentTime.textContent = formatTime(time);
+
+     if (dom.audio.duration) {
+         dom.seekSlider.value = (time / dom.audio.duration) * 100;
+     }
+
+     const section = state.sections[state.currentSectionIndex];
+     if (section && section.timestamps) {
+-        section.timestamps.forEach((ts, i) => {
++        // Start search from current index for efficiency
++        const ts = section.timestamps;
++        let i = state.currentWordIndex;
++        
++        // Find current word (may need to search forward or backward on seek)
++        while (i > 0 && time < ts[i].start) i--;
++        while (i < ts.length - 1 && time >= ts[i].end) i++;
++        
++        state.currentWordIndex = i;
++        
++        // Update only nearby words for highlighting
++        for (let j = Math.max(0, i - 5); j < Math.min(ts.length, i + 10); j++) {
+             const el = document.getElementById(`word-${j}`);
+             if (el) {
+-                if (time >= ts.start && time < ts.end) {
++                if (time >= ts[j].start && time < ts[j].end) {
+                     el.classList.add('active');
+-                    if (i % 10 === 0) {
++                    if (j === i) {
+                         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     }
+                 } else {
+                     el.classList.remove('active');
+-                    if (time > ts.end) el.classList.add('spoken');
++                    if (time > ts[j].end) el.classList.add('spoken');
+                     else el.classList.remove('spoken');
+                 }
+             }
+-        });
++        }
+     }
+ }
+```
+</details>
+
+---
+
+`371-375`: **formatTime utility is duplicated.**
+
+This function is identical to the one in `apps/lecture/App.jsx` (lines 108-112) and `apps/audiobook/src/App.jsx`. Consider extracting to a shared utility.
+
+---
+
+`172-196`: **Polling interval not cleared on component unmount or page navigation.**
+
+If the user navigates away or refreshes before job completion, the interval continues. Consider adding cleanup on `beforeunload` or using `AbortController` for fetch calls.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/components/Tester.jsx (1)</summary><blockquote>
+
+`111-267`: **Heavy use of inline styles.**
+
+The component uses extensive inline styles which makes maintenance harder and prevents style reuse. Consider moving these to a CSS file or using CSS-in-JS consistently.
+
+</blockquote></details>
+
+</blockquote></details>
+
+<details>
+<summary>📜 Review details</summary>
+
+**Configuration used**: defaults
+
+**Review profile**: CHILL
+
+**Plan**: Pro
+
+<details>
+<summary>📥 Commits</summary>
+
+Reviewing files that changed from the base of the PR and between 0297c0607579adac0106557348085428c048ecc0 and e8d41e8d02cecb480156e5cd003d51f32626909b.
+
+</details>
+
+<details>
+<summary>⛔ Files ignored due to path filters (9)</summary>
+
+* `apps/audiobook/package-lock.json` is excluded by `!**/package-lock.json`
+* `apps/audiobook/public/vite.svg` is excluded by `!**/*.svg`
+* `apps/audiobook/src/assets/cover.png` is excluded by `!**/*.png`
+* `apps/audiobook/src/assets/react.svg` is excluded by `!**/*.svg`
+* `deploy_pdf.log` is excluded by `!**/*.log`
+* `deploy_tts.log` is excluded by `!**/*.log`
+* `public_deploy/audiobook/assets/cover-CHrOCsbB.png` is excluded by `!**/*.png`
+* `public_deploy/audiobook/vite.svg` is excluded by `!**/*.svg`
+* `suite_debug.log` is excluded by `!**/*.log`
+
+</details>
+
+<details>
+<summary>📒 Files selected for processing (38)</summary>
+
+* `.firebase/hosting.cHVibGljX2RlcGxveQ.cache` (1 hunks)
+* `.firebaserc` (1 hunks)
+* `apps/audiobook/.gitignore` (1 hunks)
+* `apps/audiobook/README.md` (1 hunks)
+* `apps/audiobook/eslint.config.js` (1 hunks)
+* `apps/audiobook/index.html` (1 hunks)
+* `apps/audiobook/package.json` (1 hunks)
+* `apps/audiobook/src/App.css` (1 hunks)
+* `apps/audiobook/src/App.jsx` (1 hunks)
+* `apps/audiobook/src/components/Tester.jsx` (1 hunks)
+* `apps/audiobook/src/index.css` (1 hunks)
+* `apps/audiobook/src/main.jsx` (1 hunks)
+* `apps/audiobook/vite.config.js` (1 hunks)
+* `apps/portal/index.html` (1 hunks)
+* `apps/portal/style.css` (1 hunks)
+* `deploy_hosting.sh` (1 hunks)
+* `deploy_services.sh` (1 hunks)
+* `firebase.json` (1 hunks)
+* `public_deploy/audiobook/assets/index-47a2syEO.css` (1 hunks)
+* `public_deploy/audiobook/assets/index-Y1tckfnb.css` (1 hunks)
+* `public_deploy/audiobook/index.html` (1 hunks)
+* `public_deploy/index.html` (1 hunks)
+* `public_deploy/lecture/app.js` (1 hunks)
+* `public_deploy/lecture/config.js` (1 hunks)
+* `public_deploy/lecture/index.html` (1 hunks)
+* `public_deploy/lecture/style.css` (1 hunks)
+* `public_deploy/style.css` (1 hunks)
+* `requirements.txt` (1 hunks)
+* `services/analyzer/main.py` (4 hunks)
+* `services/audio-gen/main.py` (4 hunks)
+* `services/orchestrator/main.py` (1 hunks)
+* `services/orchestrator/requirements.txt` (1 hunks)
+* `services/pdf-processor/main.py` (1 hunks)
+* `services/pdf-processor/requirements.txt` (1 hunks)
+* `services/script-gen/main.py` (5 hunks)
+* `services/tts-service/main.py` (1 hunks)
+* `services/tts-service/requirements.txt` (1 hunks)
+* `start_suite.sh` (1 hunks)
+
+</details>
+
+<details>
+<summary>🧰 Additional context used</summary>
+
+<details>
+<summary>🧬 Code graph analysis (6)</summary>
+
+<details>
+<summary>public_deploy/lecture/config.js (1)</summary><blockquote>
+
+<details>
+<summary>apps/lecture/config.js (1)</summary>
+
+* `CONFIG` (3-14)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>public_deploy/lecture/app.js (1)</summary><blockquote>
+
+<details>
+<summary>apps/lecture/config.js (1)</summary>
+
+* `CONFIG` (3-14)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/App.jsx (1)</summary><blockquote>
+
+<details>
+<summary>apps/audiobook/src/components/Tester.jsx (4)</summary>
+
+* `file` (7-7)
+* `audioUrl` (10-10)
+* `PDF_API` (15-15)
+* `Tester` (4-269)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>services/tts-service/main.py (3)</summary><blockquote>
+
+<details>
+<summary>public_deploy/lecture/app.js (4)</summary>
+
+* `data` (130-130)
+* `data` (151-151)
+* `response` (123-126)
+* `response` (149-149)
+
+</details>
+<details>
+<summary>apps/lecture/app.js (4)</summary>
+
+* `data` (130-130)
+* `data` (151-151)
+* `response` (123-126)
+* `response` (149-149)
+
+</details>
+<details>
+<summary>apps/audiobook/src/components/Tester.jsx (2)</summary>
+
+* `text` (6-6)
+* `provider` (8-8)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>services/audio-gen/main.py (1)</summary><blockquote>
+
+<details>
+<summary>apps/audiobook/src/components/Tester.jsx (2)</summary>
+
+* `text` (6-6)
+* `provider` (8-8)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/components/Tester.jsx (1)</summary><blockquote>
+
+<details>
+<summary>apps/audiobook/src/App.jsx (3)</summary>
+
+* `file` (20-20)
+* `audioUrl` (21-21)
+* `PDF_API` (30-30)
+
+</details>
+
+</blockquote></details>
+
+</details><details>
+<summary>🪛 OSV Scanner (2.3.0)</summary>
+
+<details>
+<summary>services/pdf-processor/requirements.txt</summary>
+
+[HIGH] 1-1: werkzeug 3.0.3: Werkzeug safe_join not safe on Windows
+
+(GHSA-f9vj-2wh5-fj8j)
+
+---
+
+[HIGH] 1-1: werkzeug 3.0.3: Werkzeug safe_join() allows Windows special device names
+
+(GHSA-hgf8-39gv-g3f2)
+
+---
+
+[HIGH] 1-1: werkzeug 3.0.3: Werkzeug possible resource exhaustion when parsing file data in forms
+
+(GHSA-q34m-jh98-gwm2)
+
+</details>
+
+</details>
+<details>
+<summary>🪛 Ruff (0.14.8)</summary>
+
+<details>
+<summary>services/pdf-processor/main.py</summary>
+
+41-41: Loop control variable `i` not used within loop body
+
+Rename unused `i` to `_i`
+
+(B007)
+
+---
+
+54-54: Do not catch blind exception: `Exception`
+
+(BLE001)
+
+</details>
+<details>
+<summary>services/orchestrator/main.py</summary>
+
+57-57: Probable use of `requests` call without timeout
+
+(S113)
+
+---
+
+79-79: Probable use of `requests` call without timeout
+
+(S113)
+
+---
+
+98-98: Do not catch blind exception: `Exception`
+
+(BLE001)
+
+</details>
+<details>
+<summary>services/tts-service/main.py</summary>
+
+67-67: Do not catch blind exception: `Exception`
+
+(BLE001)
+
+---
+
+118-118: Avoid specifying long messages outside the exception class
+
+(TRY003)
+
+---
+
+139-139: Probable use of `requests` call without timeout
+
+(S113)
+
+---
+
+142-142: Create your own exception
+
+(TRY002)
+
+---
+
+142-142: Avoid specifying long messages outside the exception class
+
+(TRY003)
+
+</details>
+
+</details>
+<details>
+<summary>🪛 Shellcheck (0.11.0)</summary>
+
+<details>
+<summary>deploy_hosting.sh</summary>
+
+[warning] 41-41: Use 'cd ... || exit' or 'cd ... || return' in case cd fails.
+
+(SC2164)
+
+</details>
+<details>
+<summary>start_suite.sh</summary>
+
+[warning] 10-10: Quote this to prevent word splitting.
+
+(SC2046)
+
+</details>
+
+</details>
+
+</details>
+
+<details>
+<summary>🔇 Additional comments (36)</summary><blockquote>
+
+<details>
+<summary>services/audio-gen/main.py (3)</summary><blockquote>
+
+`128-128`: **LGTM! Cost tracking initialization is clear.**
+
+The initialization of `total_audio_cost` as a float accumulator is appropriate for tracking cumulative costs across sections.
+
+---
+
+`173-174`: **LGTM! Section metadata is properly enriched.**
+
+The addition of `characters` and `cost_usd` to each section result provides valuable per-section cost visibility for tracking and debugging.
+
+---
+
+`144-153`: **Update pricing comments with current rates and clarify voice model types.**
+
+The ElevenLabs rate of $200.00 per 1M characters (Line 150) is correct. However, for Google Cloud Text-to-Speech, the pricing appears conflated:
+- <cite index="32-2">WaveNet voices cost $16.00 per 1M characters</cite>, not "Journey/Studio"
+- <cite index="25-2">Studio Voices cost $0.00016 per byte ($160 per 1M characters)</cite>, not $16.00
+- Journey voice pricing should be verified against the official Google Cloud pricing documentation
+
+Clarify which specific Google voice model is actually being used and update the comment to reference the correct pricing tier and rate.
+
+</blockquote></details>
+<details>
+<summary>services/analyzer/main.py (3)</summary><blockquote>
+
+`246-260`: **LGTM! Fallback path includes consistent cost tracking.**
+
+The cost calculation for the text fallback path mirrors the vision path implementation, ensuring consistent cost tracking across both analysis methods. The metadata structure is identical, which is good for downstream processing.
+
+---
+
+`295-308`: **LGTM! Cost tracking is properly integrated into job status.**
+
+The restructured `analysis_data` dictionary clearly exposes cost information at the job level, and the use of `total_estimated_cost_usd` provides a clean accumulator for multi-phase cost aggregation.
+
+---
+
+`187-200`: **Pricing rates are accurate.**
+
+The cost calculation uses correct hardcoded rates:
+- Input: $0.50 per 1M tokens (Line 197)
+- Output: $3 per 1M tokens (Line 198)
+
+These match the official Gemini 3 Flash API pricing. However, consider storing pricing rates in a configuration file or constants module to avoid future manual updates if rates change.
+
+</blockquote></details>
+<details>
+<summary>services/script-gen/main.py (4)</summary><blockquote>
+
+`104-116`: **LGTM! Function signature change properly returns usage metadata.**
+
+The updated return signature `(response.text, usage)` cleanly provides both the generated script and token usage data, enabling per-section cost tracking. The usage dictionary structure is clear and consistent.
+
+---
+
+`188-188`: **LGTM! Cost accumulator initialization is appropriate.**
+
+The `total_script_cost` accumulator follows the same pattern as `total_audio_cost` in the audio-gen service, maintaining consistency across the codebase.
+
+---
+
+`199-203`: **Cost calculation is correct and consistent.**
+
+The per-section cost calculation uses the same Gemini 3.0 Flash rates as the analyzer service ($0.50/1M input, $3.00/1M output), which ensures cost tracking consistency across pipeline stages. However, these rates should still be verified (see analyzer verification request).
+
+
+
+
+Refer to the pricing verification request in `services/analyzer/main.py` at Lines 187-200.
+
+---
+
+`208-210`: **LGTM! Per-section metadata is comprehensive.**
+
+Adding `usage` and `cost_usd` to each section result provides excellent visibility into the cost breakdown for each generated section, which is valuable for debugging and cost optimization.
+
+</blockquote></details>
+<details>
+<summary>services/tts-service/requirements.txt (1)</summary><blockquote>
+
+`2-2`: **Verify flask 3.0.3 security status.**
+
+This service uses the same flask version (3.0.3) as the PDF processor. Ensure any security advisories affecting flask or its werkzeug dependency are addressed consistently across both services.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/.gitignore (1)</summary><blockquote>
+
+`1-25`: **LGTM!**
+
+The .gitignore patterns comprehensively cover Node.js/Vite build artifacts, environment files, logs, and editor-specific configurations. The whitelist exception for `.vscode/extensions.json` while ignoring other `.vscode` contents is a good practice for team development.
+
+</blockquote></details>
+<details>
+<summary>.firebaserc (1)</summary><blockquote>
+
+`1-5`: **LGTM!**
+
+The Firebase project configuration correctly sets the default project target for CLI operations. This aligns with the Firebase hosting setup and deployment workflow introduced in this PR.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/eslint.config.js (1)</summary><blockquote>
+
+`5-5`: No issues to address. The import path is correct and follows ESLint's official flat config API.
+
+
+> Likely an incorrect or invalid review comment.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/App.css (1)</summary><blockquote>
+
+`1-1`: **LGTM - intentional CSS consolidation.**
+
+The migration from App.css to index.css aligns with the centralized styling strategy documented in the AI summary.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/main.jsx (1)</summary><blockquote>
+
+`1-10`: **LGTM - follows React 19 best practices.**
+
+The entry point correctly uses the modern `createRoot` API and enables `StrictMode` for development-time checks. The structure aligns with React 19 conventions.
+
+</blockquote></details>
+<details>
+<summary>services/orchestrator/requirements.txt (1)</summary><blockquote>
+
+`1-3`: **LGTM - dependencies properly versioned.**
+
+All three dependencies use appropriate version constraints that balance stability and security updates. This contrasts positively with the unpinned `requests` in the root requirements.txt.
+
+</blockquote></details>
+<details>
+<summary>firebase.json (1)</summary><blockquote>
+
+`1-24`: **LGTM - Firebase hosting configured correctly.**
+
+The rewrite rules follow proper precedence (specific routes before catch-all), the ignore patterns are appropriate, and the public directory aligns with the PR's deployment structure.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/vite.config.js (1)</summary><blockquote>
+
+`1-8`: **LGTM!**
+
+Clean Vite configuration with appropriate base path that aligns with the Firebase hosting rewrites for `/audiobook/**`.
+
+</blockquote></details>
+<details>
+<summary>public_deploy/audiobook/assets/index-Y1tckfnb.css (1)</summary><blockquote>
+
+`1-1`: **Build artifact looks correct.**
+
+This is a minified Vite build output. The external Google Fonts import may cause a slight render delay; consider using `font-display: swap` (which appears to be set via `&display=swap` in the URL) to mitigate FOIT (flash of invisible text).
+
+</blockquote></details>
+<details>
+<summary>public_deploy/audiobook/assets/index-47a2syEO.css (1)</summary><blockquote>
+
+`1-1`: **LGTM!**
+
+This minified build artifact provides consistent dark-themed styling for form elements and audio controls, complementing the other audiobook CSS assets.
+
+</blockquote></details>
+<details>
+<summary>public_deploy/index.html (1)</summary><blockquote>
+
+`1-70`: **LGTM overall!**
+
+Clean, semantic HTML with good use of preconnect hints for fonts. The landing page structure effectively guides users to the two main features.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/package.json (1)</summary><blockquote>
+
+`12-27`: All specified versions exist on npm and are compatible. Vite 7.2.4 is a stable release receiving regular patches; lucide-react 0.561.0 is the latest version; React 19.2.0 and react-dom 19.2.0 exist and work with the specified dependencies. No compatibility issues detected.
+
+
+
+> Likely an incorrect or invalid review comment.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/index.css (1)</summary><blockquote>
+
+`1-274`: **LGTM! Clean and well-structured styling.**
+
+The CSS establishes a cohesive dark theme with glassmorphism effects, smooth animations, and responsive design. The separation of concerns (upload zone, player UI, utilities) is clear and maintainable.
+
+</blockquote></details>
+<details>
+<summary>apps/portal/style.css (1)</summary><blockquote>
+
+`1-225`: **LGTM! Cohesive portal styling.**
+
+The CSS provides a unified dark theme with animated backgrounds, responsive card grids, and distinct hover states for different card types. The glassmorphism effects and gradient treatments align well with the overall design system.
+
+</blockquote></details>
+<details>
+<summary>apps/portal/index.html (1)</summary><blockquote>
+
+`1-70`: **LGTM! Clean semantic markup.**
+
+The HTML provides a clear landing page with semantic structure, accessible navigation cards, and appropriate meta tags. The routing relies on paths like `/lecture/` and `/audiobook/`, which aligns with the Firebase hosting rewrites mentioned in the PR objectives.
+
+</blockquote></details>
+<details>
+<summary>services/orchestrator/main.py (1)</summary><blockquote>
+
+`22-31`: **CORS headers allow all origins.**
+
+The CORS configuration uses `Access-Control-Allow-Origin: *`, which permits requests from any domain. While this may be intentional for development or public APIs, verify this aligns with your security requirements for production.
+
+
+
+If this service should only be accessible from your Firebase-hosted frontend, consider restricting origins:
+
+```python
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', '*').split(',')
+
+# In request handler:
+origin = request.headers.get('Origin', '')
+if origin in ALLOWED_ORIGINS or '*' in ALLOWED_ORIGINS:
+    headers = {'Access-Control-Allow-Origin': origin}
+else:
+    return ('Origin not allowed', 403)
+```
+
+</blockquote></details>
+<details>
+<summary>public_deploy/lecture/index.html (1)</summary><blockquote>
+
+`1-171`: **LGTM! Well-structured player interface.**
+
+The HTML provides a comprehensive three-view interface (upload, processing, player) with semantic markup, accessible controls, and proper separation of concerns. The layout accommodates drag-and-drop uploads, progress tracking, a sidebar table of contents, and synchronized audio playback controls. The structure integrates cleanly with the companion config.js, app.js, and style.css files.
+
+</blockquote></details>
+<details>
+<summary>public_deploy/style.css (2)</summary><blockquote>
+
+`1-11`: **Well-structured CSS variables for theming.**
+
+Good use of CSS custom properties for centralized color and typography management. This enables easy theme modifications and consistency across the UI.
+
+---
+
+`69-76`: **Vendor-prefixed gradient text properties.**
+
+The `-webkit-background-clip` and `-webkit-text-fill-color` properties are used for the gradient text effect. Note that `background-clip: text` is now widely supported in modern browsers without the prefix, though the webkit prefix ensures Safari compatibility.
+
+</blockquote></details>
+<details>
+<summary>services/tts-service/main.py (2)</summary><blockquote>
+
+`27-40`: **CORS configuration looks good.**
+
+Proper preflight handling with appropriate headers for cross-origin requests. The `Access-Control-Max-Age: 3600` caches preflight responses for 1 hour, reducing overhead.
+
+---
+
+`67-69`: **Broad exception catch is acceptable here.**
+
+The static analysis flags `Exception` but for a top-level HTTP handler, catching all exceptions to return a 500 response with error details is appropriate. The error is logged via `print()`.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/App.jsx (1)</summary><blockquote>
+
+`159-164`: **Progress bar seek implementation looks good.**
+
+Clean implementation of click-to-seek on the progress bar using bounding rect calculations.
+
+</blockquote></details>
+<details>
+<summary>public_deploy/lecture/app.js (1)</summary><blockquote>
+
+`1-12`: **Well-structured global state management.**
+
+Clear separation of concerns with state object tracking job context, sections, and audio playback state.
+
+</blockquote></details>
+<details>
+<summary>apps/audiobook/src/components/Tester.jsx (2)</summary><blockquote>
+
+`35-41`: **Language code derivation assumes specific voice name format.**
+
+The code extracts `language_code` by splitting the voice name (e.g., `"en-US-Journey-F"` → `"en-US"`). This works for current voices but could break if voice naming conventions change.
+
+
+Consider validating or documenting this assumption, or storing language codes explicitly.
+
+---
+
+`29-97`: **handleSynthesize implementation is well-structured.**
+
+Good separation of text vs PDF modes, proper error handling with try/catch/finally, and informative logging throughout the process.
+
+</blockquote></details>
+
+</blockquote></details>
+
+</details>
+
+<!-- This is an auto-generated comment by CodeRabbit for review status -->

@@ -177,6 +177,11 @@ function startPolling() {
     state.interval = setInterval(async () => {
         try {
             const response = await fetch(`${CONFIG.API_ENDPOINTS.STATUS}?jobId=${state.jobId}`);
+            if (!response.ok) {
+                console.error('Status check failed:', response.status);
+                return;
+            }
+
             const data = await response.json();
 
             updateStatusUI(data);

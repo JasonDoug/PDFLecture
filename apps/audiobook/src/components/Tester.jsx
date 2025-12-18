@@ -34,7 +34,12 @@ const Tester = () => {
             const settings = {}
             if (provider === 'google') {
                 settings.voice_name = googleVoice
-                settings.language_code = googleVoice.split('-').slice(0, 2).join('-')
+                // Explicitly map common voices to language codes
+                const langMap = {
+                    'en-US': ['en-US-Journey-F', 'en-US-Journey-D', 'en-US-Studio-O', 'en-US-Studio-Q'],
+                    'en-GB': ['en-GB-Neural2-A', 'en-GB-Wavenet-A']
+                }
+                settings.language_code = Object.keys(langMap).find(lang => langMap[lang].includes(googleVoice)) || 'en-US'
             } else {
                 settings.voice_id = elevenVoiceId
                 if (apiKey) settings.api_key = apiKey
@@ -98,6 +103,12 @@ const Tester = () => {
 
     const processAudioResponse = (base64Audio) => {
         addLog('Synthesis successful!', 'success')
+
+        // Revoke previous URL to prevent memory leak
+        if (audioUrl) {
+            URL.revokeObjectURL(audioUrl)
+        }
+
         const binaryString = window.atob(base64Audio)
         const bytes = new Uint8Array(binaryString.length)
         for (let i = 0; i < binaryString.length; i++) {
