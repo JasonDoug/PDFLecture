@@ -10,7 +10,7 @@ google-cloud-texttospeech==2.14.*
 google-cloud-iam==2.*
 
 # Google Generative AI (Gemini)
-google-generativeai==0.8.*
+google-generativeai>=0.8.3
 
 # Flask for local development
 Flask==3.0.*
@@ -18,3 +18,4 @@ flask-cors==4.*
 
 # Utilities
 python-dotenv==1.0.*
+pypdf==3.*

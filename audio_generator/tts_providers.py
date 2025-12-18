@@ -127,10 +127,8 @@ class GoogleTTSProvider(TTSProvider):
         
         client = texttospeech.TextToSpeechClient()
         
-        synthesis_input = texttospeech.SynthesisInput(text=text)
-        
-        # Extract language code from voice_id (e.g., "en-GB-Neural2-D" -> "en-GB")
-        # Default to "en-US" if extraction fails
+        # Audio Configuration
+        # Extract language code
         language_code = "en-US"
         if config.voice_id:
             parts = config.voice_id.split('-')
@@ -139,45 +137,81 @@ class GoogleTTSProvider(TTSProvider):
 
         voice = texttospeech.VoiceSelectionParams(
             language_code=language_code,
-            name=config.voice_id if config.voice_id else "en-US-Journey-F" # Fallback to Journey voice
+            name=config.voice_id if config.voice_id else "en-US-Journey-F"
         )
         
         audio_config = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.MP3,
             speaking_rate=config.speaking_rate
-            # Note: Google TTS standard API does not return word timestamps easily with MP3
-            # We would need to use 'enable_time_pointing' which works with LINEAR16 or specific configs
-            # For MVP, we might skip precise timestamps or estimate them.
         )
+
+        # Chunking Logic (Limit is 5000 bytes, using 4500 safe limit)
+        LIMIT = 4500
+        chunks = []
         
-        # Journey voices support time pointing? Not officially in standard docs everywhere yet for simple MP3.
-        # But let's try standard synthesis.
+        if len(text) <= LIMIT:
+            chunks.append(text)
+        else:
+            # Split by sentences to match rough boundaries
+            sentences = text.replace('. ', '.|').replace('? ', '?|').replace('! ', '!|').split('|')
+            current_chunk = ""
+            for s in sentences:
+                if len(current_chunk) + len(s) < LIMIT:
+                    current_chunk += s
+                else:
+                    if current_chunk: chunks.append(current_chunk)
+                    current_chunk = s
+            if current_chunk:
+                chunks.append(current_chunk)
         
-        response = client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice,
-            audio_config=audio_config
-        )
+        # Process Chunks
+        combined_audio = b""
+        all_timestamps = []
+        current_time_offset = 0.0
         
-        # Mock timestamps for Google (simple estimation)
-        words = text.split()
-        duration_est = len(words) / (150/60) # 150 wpm
-        avg_word_dur = duration_est / len(words) if words else 0
-        
-        timestamps = []
-        curr = 0.0
-        for w in words:
-            timestamps.append({
-                "word": w,
-                "start": curr,
-                "end": curr + avg_word_dur
-            })
-            curr += avg_word_dur
+        for chunk_text in chunks:
+            if not chunk_text.strip(): continue
+            
+            synthesis_input = texttospeech.SynthesisInput(text=chunk_text)
+            
+            try:
+                response = client.synthesize_speech(
+                    input=synthesis_input,
+                    voice=voice,
+                    audio_config=audio_config
+                )
+                
+                combined_audio += response.audio_content
+                
+                # Estimate timestamps for this chunk
+                words = chunk_text.split()
+                # 150 wpm * speaking_rate
+                wpm = 150 * config.speaking_rate
+                duration_est = len(words) / (wpm/60)
+                avg_word_dur = duration_est / len(words) if words else 0
+                
+                chunk_curr = current_time_offset
+                for w in words:
+                    all_timestamps.append({
+                        "word": w,
+                        "start": chunk_curr,
+                        "end": chunk_curr + avg_word_dur
+                    })
+                    chunk_curr += avg_word_dur
+                
+                # Update offset for next chunk logic
+                # For more accuracy we could inspect MP3 headers but estimation is consistent with previous logic
+                current_time_offset += duration_est
+                
+            except Exception as e:
+                print(f"Error synthesizing chunk: {e}")
+                # Continue best effort? Or fail? Fail is safer.
+                raise e
             
         return AudioResult(
-            audio_content=response.audio_content,
-            duration_seconds=duration_est,
-            timestamps=timestamps
+            audio_content=combined_audio,
+            duration_seconds=current_time_offset,
+            timestamps=all_timestamps
         )
 
 def get_provider(provider_name: str) -> TTSProvider:
