@@ -11,11 +11,12 @@ def get_storage_client():
     from google.cloud import storage
     return storage.Client()
 
+from google.cloud import firestore
+
 def get_firestore_client():
-    from google.cloud import firestore
     return firestore.Client()
 
-from google.cloud import firestore
+
 
 # pubsub_v1 is not used in this file, so it can be removed if not needed elsewhere.
 # For now, keeping it as it was not explicitly removed by the instruction.

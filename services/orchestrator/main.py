@@ -66,7 +66,7 @@ def orchestrate(request: Request):
         files = {'file': (file.filename, file.read(), file.content_type)}
         
         print(f"Calling PDF Processor at {PDF_PROCESSOR_URL}...")
-        pdf_resp = requests.post(PDF_PROCESSOR_URL, files=files)
+        pdf_resp = requests.post(PDF_PROCESSOR_URL, files=files, timeout=60)
         
         if pdf_resp.status_code != 200:
             return jsonify({
@@ -88,7 +88,7 @@ def orchestrate(request: Request):
             "settings": tts_settings.get('settings', {})
         }
         
-        tts_resp = requests.post(TTS_SERVICE_URL, json=tts_payload)
+        tts_resp = requests.post(TTS_SERVICE_URL, json=tts_payload, timeout=120)
         
         if tts_resp.status_code != 200:
              return jsonify({

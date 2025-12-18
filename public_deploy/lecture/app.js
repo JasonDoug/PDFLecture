@@ -11,39 +11,42 @@ const state = {
     }
 };
 
-// DOM Elements
-const views = {
-    upload: document.getElementById('upload-view'),
-    processing: document.getElementById('processing-view'),
-    player: document.getElementById('player-view')
-};
-
-const dom = {
-    dropZone: document.getElementById('drop-zone'),
-    fileInput: document.getElementById('file-input'),
-    agentSelect: document.getElementById('agent-select'),
-    uploadLoading: document.getElementById('upload-loading'),
-    progressBar: document.getElementById('progress-bar'),
-    progressMessage: document.getElementById('progress-message'),
-    progressPercent: document.getElementById('progress-percent'),
-    steps: {
-        upload: document.getElementById('step-upload'),
-        analyze: document.getElementById('step-analyze'),
-        script: document.getElementById('step-script'),
-        audio: document.getElementById('step-audio')
-    },
-    audio: document.getElementById('audio-element'),
-    playBtn: document.getElementById('btn-play'),
-    seekSlider: document.getElementById('seek-slider'),
-    currentTime: document.getElementById('current-time'),
-    totalTime: document.getElementById('total-time'),
-    tocList: document.getElementById('toc-list'),
-    transcriptContent: document.getElementById('transcript-content'),
-    sectionTitle: document.getElementById('current-section-title')
-};
+// DOM Elements (populated on load)
+let views = {};
+let dom = {};
 
 // Initialization
 function init() {
+    views = {
+        upload: document.getElementById('upload-view'),
+        processing: document.getElementById('processing-view'),
+        player: document.getElementById('player-view')
+    };
+
+    dom = {
+        dropZone: document.getElementById('drop-zone'),
+        fileInput: document.getElementById('file-input'),
+        agentSelect: document.getElementById('agent-select'),
+        uploadLoading: document.getElementById('upload-loading'),
+        progressBar: document.getElementById('progress-bar'),
+        progressMessage: document.getElementById('progress-message'),
+        progressPercent: document.getElementById('progress-percent'),
+        steps: {
+            upload: document.getElementById('step-upload'),
+            analyze: document.getElementById('step-analyze'),
+            script: document.getElementById('step-script'),
+            audio: document.getElementById('step-audio')
+        },
+        audio: document.getElementById('audio-element'),
+        playBtn: document.getElementById('btn-play'),
+        seekSlider: document.getElementById('seek-slider'),
+        currentTime: document.getElementById('current-time'),
+        totalTime: document.getElementById('total-time'),
+        tocList: document.getElementById('toc-list'),
+        transcriptContent: document.getElementById('transcript-content'),
+        sectionTitle: document.getElementById('current-section-title')
+    };
+
     setupEventListeners();
     checkUrlParams();
     loadAgents();
@@ -83,7 +86,7 @@ function setupEventListeners() {
 function checkUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const jobId = params.get('jobId');
-    if (jobId) {
+    if (jobId && jobId.trim().length > 0) {
         state.jobId = jobId;
         startPolling();
     }
@@ -379,5 +382,9 @@ function formatTime(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Start
-init();
+// Wait for DOM
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}

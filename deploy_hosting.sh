@@ -45,8 +45,8 @@ echo "✅ Created apps/audiobook/.env.production"
 echo ""
 echo "🏗️  Building Audiobook App..."
 cd apps/audiobook || { echo "❌ Failed to enter apps/audiobook"; exit 1; }
-npm install
-npm run build
+npm install || { echo "❌ npm install failed"; exit 1; }
+npm run build || { echo "❌ Build failed"; exit 1; }
 cd ../.. || { echo "❌ Failed to return to root"; exit 1; }
 
 echo ""
